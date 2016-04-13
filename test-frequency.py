@@ -15,8 +15,8 @@ GPIO.setup(_RCLK_pin, GPIO.OUT)
 GPIO.setup(_SRCLK_pin, GPIO.OUT)
 
 times = []
-brights = [0, 255, 0, 0 ,0, 0, 0, 255 ]#255, 255, 255, 255, 255, 255, 255, 255]
-
+#brights = [0, 0, 0, 0 ,0, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0]
+brights = np.ones(16) * 64
 brights = np.array(brights)
 n_channel = len(brights)
 
@@ -28,14 +28,29 @@ for i in range(n_channel-1, -1, -1):
 GPIO.output(_RCLK_pin, GPIO.HIGH) 
 GPIO.output(_RCLK_pin, GPIO.LOW) 
 
-time.sleep(1)
-GPIO.output(_SER_pin, GPIO.LOW)
+time.sleep(0.25)
+#GPIO.output(_SER_pin, GPIO.LOW)
+##GPIO.output(_SRCLK_pin, GPIO.HIGH) 
+##GPIO.output(_SRCLK_pin, GPIO.LOW) 
+#    
+#GPIO.output(_SER_pin, GPIO.HIGH)
 #GPIO.output(_SRCLK_pin, GPIO.HIGH) 
 #GPIO.output(_SRCLK_pin, GPIO.LOW) 
-
+#GPIO.output(_RCLK_pin, GPIO.HIGH) 
 #GPIO.output(_RCLK_pin, GPIO.LOW) 
-print n_channel
-
+#time.sleep(0.25)
+#GPIO.output(_SER_pin, GPIO.LOW)
+#
+#for _ in range(15):
+#    GPIO.output(_SRCLK_pin, GPIO.HIGH) 
+#    GPIO.output(_SRCLK_pin, GPIO.LOW) 
+#    GPIO.output(_RCLK_pin, GPIO.HIGH) 
+#    GPIO.output(_RCLK_pin, GPIO.LOW) 
+#    time.sleep(0.25)
+#
+##GPIO.output(_RCLK_pin, GPIO.LOW) 
+#print n_channel
+#
 #GPIO.output(_SRCLK_pin, GPIO.LOW) 
 #GPIO.output(_SER_pin, GPIO.HIGH)
 
