@@ -3,8 +3,9 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <wiringPi.h>
 #include <math.h>
+
+#include "minwiringPi.h"
 
 // SET PIN CONSTANTS
 #define CL_DATA 17
@@ -153,7 +154,7 @@ void white() {
     shiftOut(0b00000000111111111111111111111111,0x0);}
 
 int main(void) {
-    wiringPiSetupGpio();
+    wiringPiSetup();
     
     // currentl assume that:
     // CLOCK is at GPIO PIN 23
