@@ -17,12 +17,8 @@
 #include "minwiringPi.h"
 
 // some definitions:
-#define PLATINEN 2
-#define LEDS_PRO_PLATINE 8
-#define FARBEN_PRO_LED 3
-#define HELLIGKEITSSTUFEN 256
+#define HELLIGKEITSSTUFEN 1024 
 #define FRAMES_IN_BUFFER 256
-//MAX. HELLIGKEITSSTUFEN 256 BY CURRENT DESIGN!
 
 
 // TODO: unify the hardware commands into one external dependency.
@@ -110,30 +106,37 @@ void write_frame(t_memory_frame* frame) {
 
 void *worker (void* p_rbf) {
     t_memory_frame c_frame;
-    uint16_t c_rep;
+    uint16_t c_rep=1;
     uint16_t count;
     int next_read;
-
+    uint32_t begin = micros();
+    uint32_t end = micros()+10;
+    float fps;
     //ringbuffer *rbf;
     //rbf = (ringbuffer *) p_rbf;
     printf("Started Thread\n");
     while(!is_shutdown) {
-        printf("Started a loop\n");
-        printf("Reading Position is at %i\n", writer_rbf->pos_read);
+         end = micros();
+         fps = (float)c_rep/(float)((end-begin)/1000000.0);
+         printf("\rFPS: %f", fps);
+	 begin=end;
+
+        //printf("Started a loop\n");
+        //printf("Reading Position is at %i\n", writer_rbf->pos_read);
         // get current element from ringbuffer
         c_frame = writer_rbf->buffer[(writer_rbf->pos_read)].frame;
         c_rep = writer_rbf->buffer[(writer_rbf->pos_read)].rep;
-        printf("Copied frame from buffer to temporary buffer\n");
-        printf("Draw this frame %i times\n", c_rep);
+        //printf("Copied frame from buffer to temporary buffer\n");
+        //printf("Draw this frame %i times\n", c_rep);
         for (count = 0; count<c_rep; count++) {
             write_frame(&c_frame);
         }
-        printf("Succesfully drawn frame\n");
+        //printf("Succesfully drawn frame\n");
         // check if there is a new frame in the buffer
         // first, increment our read position
         next_read = (writer_rbf->pos_read + 1);
         // check for overflow
-        if (next_read > writer_rbf->capacity) next_read = 0; //could be done faster
+        if (next_read >= (writer_rbf->capacity)) next_read = 0; //could be done faster
         // now compare position to head, if they are the same repeat the last frame
         // maybe in reality we need to obtain a lock to be threadsave.
         // but I think because we only read, we just might repeat a frame unnecessarily
@@ -142,7 +145,7 @@ void *worker (void* p_rbf) {
     //        printf("No more frames\n");
         }
         writer_rbf->pos_read = next_read;
-        printf("Done drawing frame\n");
+        //printf("Done drawing frame\n");
     }
     return NULL;
 }
@@ -202,14 +205,14 @@ int init_ltd(void); // basically the same, however we will start the thread whic
 
 t_bufframe chit2buf(uint16_t rep, t_chitframe* cframe) {
         t_bufframe bff;
-        memset(&bff,0,sizeof(bff));
+        memset(&bff,0,sizeof(t_bufframe));
         // TODO: Optimize this
         int c_col, c_led, c_plat, c_rgb;
         for (c_col = 0; c_col < HELLIGKEITSSTUFEN; c_col++) {
             for (c_plat = 0; c_plat < PLATINEN; c_plat++) {
                 for (c_led = 0; c_led < LEDS_PRO_PLATINE; c_led++) {
                     for (c_rgb = 0; c_rgb < 3; c_rgb++) {
-                        bff.frame.cycle[c_col].to_gpio[3*c_led+c_rgb] |= (cframe->brightness[c_plat][c_led][c_rgb] < c_col) << c_plat;
+                        bff.frame.cycle[c_col].to_gpio[(3*(LEDS_PRO_PLATINE-1-c_led)+(2-c_rgb))] |= (cframe->brightness[c_plat][c_led][c_rgb] > c_col) << c_plat;
                     }
                 }
              }
@@ -218,18 +221,19 @@ t_bufframe chit2buf(uint16_t rep, t_chitframe* cframe) {
         return bff;
 }
 
+
 void add_frame(uint16_t rep, t_chitframe* frame) {
     // align a frame to optimal memory layout and add to the ring buffer
     // to be drawn (rep) times. This call will block if the ring buffer is full
 
     int next;
     next = (writer_rbf->pos_write);
-    if (next > writer_rbf->capacity) next=0;
+    if (next > (writer_rbf->capacity-1)) next=0;
     while (next == writer_rbf->pos_read) {
         // Wait for reader to advance
         sleep(1);
     }
-    printf("Inserting frame into buffer at position %i\n", next);
+    //printf("Inserting frame into buffer at position %i\n", next);
     writer_rbf->buffer[next] = chit2buf(rep, frame);
     // move write head ahead, free access for reader
     writer_rbf->pos_write = next+1;
@@ -245,28 +249,20 @@ int reset(void); // try to reset the ring buffer and thread if something failed.
 int main(void) {
     // demo time
     init();
-    int c_pl, c_led, c_rgb;
     t_chitframe red;
+    memset(&red,0,sizeof(t_chitframe));
+  
     printf("Prepare test frame\n");
-    for (c_pl = 0; c_pl < PLATINEN; c_pl++)
-        for (c_led = 0; c_led < LEDS_PRO_PLATINE; c_led++)
-           for (c_rgb = 0; c_rgb <3; c_rgb++)
-               red.brightness[c_pl][c_led][c_rgb] = 0;
-    red.brightness[0][6][0]=255;
-    red.brightness[1][6][0]=255;
-    red.brightness[2][6][0]=255;
-
-    red.brightness[3][6][0]=255;
-    red.brightness[4][6][0]=255;
-    red.brightness[5][6][0]=255;
-
-    red.brightness[6][6][0]=255;
-    red.brightness[7][6][0]=255;
-
-    printf("Send frame to thread\n");
-    add_frame((uint16_t)100, &red);
+    int i,j,k;
+    while(1) {
+    for(i=0;i<3;i++)
+    red.brightness[0][(rand()&0x7)][i]=rand()&0x3FF;
+//    red.brightness[1][6][1]=255;
+    //printf("Send frame to thread\n");
+    add_frame((uint16_t)5, &red);
+//    red.brightness[0][i][0]=0;
+    }
     printf("Go to sleep\n");
-    sleep(60);
     return 0;
 }
 

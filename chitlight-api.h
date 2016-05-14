@@ -9,12 +9,9 @@
 #define PLATINEN 2
 #define LEDS_PRO_PLATINE 8
 #define FARBEN_PRO_LED 3
-#define HELLIGKEITSSTUFEN 256
-#define FRAMES_IN_BUFFER 256
-//MAX. HELLIGKEITSSTUFEN 256 BY CURRENT DESIGN!
 
 typedef struct {
-     uint8_t brightness[PLATINEN][LEDS_PRO_PLATINE][FARBEN_PRO_LED];
+     uint16_t brightness[PLATINEN][LEDS_PRO_PLATINE][FARBEN_PRO_LED];
 } t_chitframe;
 
 
