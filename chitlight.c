@@ -3,24 +3,37 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <wiringPi.h>
 #include <math.h>
 
+#include "minwiringPi.h"
+
 // SET PIN CONSTANTS
-#define CL_DATA 17
+
+// set the value to the GPIO pin you connected the reset latch
+// and clock to
 #define CL_RESET 24
 #define CL_CLOCK 23
 
+// this defines a data pin. It is only used
+// for debug purposes and shouldn't affect
+// the normal programm!
+#define CL_DATA 17
+
+
+// cycle the clock once to shift the data through the registers
 void man_cycle_clock(void) {
     digitalWrite(CL_CLOCK,1);
     digitalWrite(CL_CLOCK,0);
 }
 
+// activate the data in the registers by cycling the reset latch
+// (it's actually not called reset, but I keep calling it that)
 void man_flush(void) {
     digitalWrite(CL_RESET,1);
     digitalWrite(CL_RESET,0);
 }
 
+// deprecated test function
 void man_fast_write(int state) {
     //
     // Simulates a simultaneous write to all DATA pins
@@ -40,30 +53,51 @@ void man_fast_write(int state) {
     digitalWriteByte(st);
 }
 
+// our current main data function. shifts the 24 least significant
+// bits of valN to the shift registers behind dataN.
 void shiftOut (uint32_t val1, uint32_t val2) {
-    // masks out the current flush and clock pins
-    int ports_mask_2 = 0b00000010;
-    int ports_mask_1 = 0b00000001;
-    // defines the clock and flush pins 
+    // these mark the position of the GPIO pins we want to use in the memory
+    // set to 1 where you want to use the pin as appropiate.
+    // the order is
+    // 0b [4] [25] [24] [23] [22] [27] [18] [17]
+    // e.g. 0b00000001 will use port 17
+    // n.b. port 25 seems to not work in this setup. However, one should check
+    // again when sober, did not find any reason for this behaviour.
+    int ports_mask_2 = 0b00000010;  // GPIO 18
+    int ports_mask_1 = 0b00000001;  // GPIO 17
+    // defines the clock and flush pins - currently unused
+    // but maybe we can get a little bit more speed by using them...
     int clck = 0b00010000;
     int flsh = 0b00100000;
 
     // we'll flush the last 24 bits of val to the shifts
 
     int i;
-    uint8_t data_out1 = 0;
+    uint8_t data_out1 = 0; // create empty ints
     uint8_t data_out2 = 0;
+    // loop through every (binary) position of the value
     for (i=24; i >= 0; i--) {
+        // extract the bit at position i out of valN, check if it's
+        // 1 || 0, multiply the result (ie leave the mask and turn on DATA
+        // or set mask to 0
         data_out1 = ports_mask_1 * ((val2 & (1 << i))!=0);
         data_out2 = ports_mask_2 * ((val1 & (1 << i))!=0);
+        // combine the data matrixes and write to GPIO
         digitalWriteByte(data_out1 | data_out2);
-        //digitalWriteByte(data_out1 | data_out2 | clck);
-        //digitalWriteByte(data_out1 | data_out2);
+          //digitalWriteByte(data_out1 | data_out2 | clck);
+          //digitalWriteByte(data_out1 | data_out2);
+        // currently manipulating only clock pin here is faster
+        // if we patch digitalWriteByte we might shave a cpu cycle or two here...
 	man_cycle_clock();
     }
+    // everything is in the shift registers, so we can latch the reset
+    // unrolling the loop and patching digitalWriteByte again might perform faster...
     man_flush();
 }
 
+// benchmark function
+// cycles the first LED on DATA1 white and off, but it is the same
+// as changing all LEDs at once...
 void benchmark (int loops) {
     int i;
     uint32_t val = 0x7;
@@ -73,6 +107,9 @@ void benchmark (int loops) {
     }    
 }
 
+// w.i.p. function, intended to dump
+// preformated data of pwm-brightnesses
+// to the shift registers.
 void shiftpwm(uint32_t duty_c[32]) {
    int i,j;
    for (i=0; i<60; i++) {
@@ -81,10 +118,14 @@ void shiftpwm(uint32_t duty_c[32]) {
        }}
 }
 
+// generate a bit-representation of a
+// duty-cycle of width value.
 uint32_t int2bin(uint8_t value) {
 	return pow(2,value)-1; 
 }
 
+// demo function
+// cycle beautifu colors on DATA1 and DATA2
 void pwm_benchmark (int loops) {
    //uint32_t init = millis();
    int cycle = 256;
@@ -153,7 +194,8 @@ void white() {
     shiftOut(0b00000000111111111111111111111111,0x0);}
 
 int main(void) {
-    wiringPiSetupGpio();
+    // Prepare the memory for GPIO access, etc
+    wiringPiSetup();
     
     // currentl assume that:
     // CLOCK is at GPIO PIN 23
@@ -162,8 +204,7 @@ int main(void) {
     // DATA2 is at GPIO PIN 18
 
     // Set these PINs to be output
-    // We'll have to check if we can use them
-    // in the bulk write as well.
+    // Must be done on all GPIO PINs you want to use
     pinMode(23, OUTPUT);
     pinMode(24, OUTPUT);
     pinMode(25, OUTPUT);
@@ -171,6 +212,8 @@ int main(void) {
     pinMode(18, OUTPUT);
     pinMode(27, OUTPUT);
     pinMode(4, OUTPUT);
+    
+
     int i;
 
     // Reset all LEDs
@@ -186,7 +229,7 @@ int main(void) {
     man_flush();
 
     uint32_t loops = 1000;
-    // insert 1 into register and shift through
+    
     uint32_t begin = micros();
 
     pwm_benchmark(loops);
@@ -199,6 +242,8 @@ int main(void) {
     delay(30000);
     uint32_t end = micros();
     printf("%d\n", (end-begin));
+
+    // Lights off
     shiftOut(0x0,0x0);
     
 }
