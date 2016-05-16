@@ -37,7 +37,7 @@ def get_fps():
 
 def add_frame(rep, frame):
     # test if frame is internal format or needs to be converted
-    if typeof(frame) is t_chitframe:
+    if type(frame) is t_chitframe:
         _chit.add_frame(rep, ctypes.byref(frame))
     else:
         # not implemented yet
