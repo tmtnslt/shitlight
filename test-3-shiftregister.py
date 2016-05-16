@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 # Define pins
-_SER_pin   = 25   #pin 14 on the 75HC595 
+_SER_pin   = 17   #pin 14 on the 75HC595 
 _RCLK_pin  = 24   #pin 12 on the 75HC595
 _SRCLK_pin = 23   #pin 11 on the 75HC595
 
@@ -20,13 +20,13 @@ n_channel = len(brights)
 
 # Reset all LED
 for i in range(n_channel-1, -1, -1):
-    GPIO.output(_SER_pin, GPIO.LOW)
+    GPIO.output(_SER_pin, GPIO.HIGH)
     GPIO.output(_SRCLK_pin, GPIO.HIGH) 
     GPIO.output(_SRCLK_pin, GPIO.LOW) 
 GPIO.output(_RCLK_pin, GPIO.HIGH) 
 GPIO.output(_RCLK_pin, GPIO.LOW) 
 
-time.sleep(0.5)
+time.sleep(10000000000)
 GPIO.output(_SER_pin, GPIO.LOW)
 GPIO.output(_SRCLK_pin, GPIO.HIGH) 
 GPIO.output(_SRCLK_pin, GPIO.LOW) 

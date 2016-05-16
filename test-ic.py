@@ -13,7 +13,16 @@ red = LED(0)
 yellow = LED(1)
 green = LED(2)
 
-led_list = [red, yellow, green]
+led_list = []
+for i in range(12):
+    led_list.append(LED(i))
+
+
+shiftpi.shiftRegisters(2)
+
+#led_list = [red, yellow, green]
+
+
 
 def switch(leds, on, off):
     sort_indices = np.argsort(on)
@@ -51,17 +60,19 @@ def get_inactives():
     
 try:
     t0 = time.time()
-    wait = np.random.random() + 2
-
+#    wait = np.random.random() + 1
+    wait = 1.
     while True:
-        if time.time() > t0 + wait or len(get_actives()) < 1:
+        if time.time() > t0 + wait and len(get_actives()) < 3: #or len(get_actives()) < 1:
             inactives = get_inactives()
             if len(inactives) > 0:
                 activate = np.random.choice(inactives)
-                duration = np.round(np.random.random() / 2, 1) + 0.5
+#                duration = np.round(np.random.random() / 2, 1) + 0.5
+                duration = 1.5
                 activate.start_one_cycle(duration)
             t0 = time.time()
-            wait = np.random.random() + 2
+#            wait = np.random.random() + 1
+            wait = 1.5
 
         actives = get_actives()
         on_list = np.zeros(len(actives))
