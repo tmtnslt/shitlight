@@ -25,7 +25,7 @@ class LED():
       
     def start_one_cycle(self, duration):
 
-        self._current_total_steps = duration * 500.
+        self._current_total_steps = duration * 200.
         self._current_step = 0
 
         self._is_active = True
@@ -33,7 +33,7 @@ class LED():
         self._getting_darker = False
 
     def one_step(self):
-        one_cycle = 1 / 500.
+        one_cycle = 1 / 200.
         on = (1. * self._current_step / self._current_total_steps) * one_cycle
         off = (1 - on) * one_cycle
         
