@@ -18,7 +18,7 @@
 
 // some definitions:
 #define HELLIGKEITSSTUFEN 1024 
-#define FRAMES_IN_BUFFER 256
+#define FRAMES_IN_BUFFER 1024
 
 
 // TODO: unify the hardware commands into one external dependency.
@@ -246,7 +246,88 @@ int shutdown(void); // end the thread and clear the GPIOs
 
 int reset(void); // try to reset the ring buffer and thread if something failed.
 
+float getnorm( float* normvec, int len )
+{
+     float norm= 0;
+     int i;
+     for(i=0;i<len;i++)
+     {
+	norm+= normvec[i]*normvec[i];
+     }
+     return sqrtf(norm);
+}
+
+void getrandvec( float* randvec, int len )
+{
+     int i;
+     do
+     {
+	for(i=0;i<len;i++)
+	    randvec[i] = (1.0-2.0*(float)rand()/(float)RAND_MAX);
+     }
+     while(getnorm(randvec, len) > 1.0);
+}
+
+
+void getnormvec( float* normvec, int len )
+{
+     float norm = getnorm(normvec, len);
+     while(len--)
+	normvec[len] /= norm;
+}
+
+
 int main(void) {
+    init();
+    t_chitframe f;
+    memset(&f, 0, sizeof(t_chitframe));
+    int i,j,k,l,flip;
+    k=50;
+    flip=1;
+    l=0;
+    while (1) {
+       for (j=(-16);j<16;j++) {
+          i = abs(j)-4;
+          memset(&f, 0, sizeof(t_chitframe));
+          if((i-5)>=0)
+              f.brightness[0][i-5][l] = 1024/32;
+          if((i-4)>=0)
+              f.brightness[0][i-4][l] = 1024/16;
+          if((i-3)>=0)
+              f.brightness[0][i-3][l] = 1024/8;
+          if((i-2)>=0) 
+              f.brightness[0][i-2][l] = 1024/4;
+          if((i-1)>=0) 
+              f.brightness[0][i-1][l] = 1024/2;
+          if((i>=0) && (i<8)) 
+              f.brightness[0][i][l] = 1024;
+          if((i+1)<8) 
+              f.brightness[0][i+1][l]= 1024/2;
+          if((i+2)<8) 
+              f.brightness[0][i+2][l] = 1024/4;
+          if((i+3)<8)
+              f.brightness[0][i+3][l] = 1024/8; 
+          if((i+4)<8)
+              f.brightness[0][i+4][l] = 1024/16; 
+          if((i+5)<8)
+              f.brightness[0][i+5][l] = 1024/32; 
+          add_frame((uint16_t)k/5, &f);
+       }
+       if((k>25) && (flip==1)) {
+         k--;
+       } else {
+         if ((k<125) && (flip==0)) {
+           k++;
+         }
+         else {      
+             flip=!flip;
+             l++;
+             if(l>=3) l=0;
+         }
+      }
+    }
+}
+int old_main(void) {
     // demo time
     init();
     t_chitframe red;
@@ -254,15 +335,60 @@ int main(void) {
   
     printf("Prepare test frame\n");
     int i,j,k;
+    float colorvec_r[8];
+    float colorvec_g[8];
+    float colorvec_b[8];
+    float randvec[8];
+    float norm_r, norm_g, norm_b;
+    float gamma=0.5;
+    float variation= .005000000;
+    
+    memset(colorvec_r, 0, sizeof(colorvec_r));
+    memset(colorvec_g, 0, sizeof(colorvec_g));
+    memset(colorvec_b, 0, sizeof(colorvec_b));
+    colorvec_r[0] = 1.0;
+    colorvec_g[5] = 1.0;
+    colorvec_b[7] = 1.0;
+	
     while(1) {
-    for(i=0;i<3;i++)
-    red.brightness[0][(rand()&0x7)][i]=rand()&0x3FF;
+    for(i=0;i<8;i++) {
+	getrandvec(randvec, 8);
+	getnormvec(randvec, 8);
+	colorvec_r[i] += variation*randvec[i];
+	getrandvec(randvec, 8);
+	getnormvec(randvec, 8);
+	colorvec_g[i] += variation*randvec[i];
+	getrandvec(randvec, 8);
+	getnormvec(randvec, 8);
+	colorvec_b[i] += variation*randvec[i];
+    }
+    norm_r=0; norm_g=0; norm_b=0;
+    for(i=0;i<8;i++) {
+	norm_r+=colorvec_r[i]*colorvec_r[i];
+	norm_g+=colorvec_g[i]*colorvec_g[i];
+	norm_b+=colorvec_b[i]*colorvec_b[i];
+    }
+    for(i=0;i<8;i++) {
+	colorvec_r[i] /= sqrt(norm_r);
+	colorvec_g[i] /= sqrt(norm_g);
+	colorvec_b[i] /= sqrt(norm_b);
+    }
+    for(i=0;i<8;i++) {
+         red.brightness[0][i][0]= (uint16_t)(powf(fabs(colorvec_r[i]), gamma)*1023.0)&0x3FF;
+         red.brightness[0][i][1]= (uint16_t)(powf(fabs(colorvec_g[i]), gamma)*1023.0)&0x3FF;
+         red.brightness[0][i][2]= (uint16_t)(powf(fabs(colorvec_b[i]), gamma)*1023.0)&0x3FF;
+    }
 //    red.brightness[1][6][1]=255;
     //printf("Send frame to thread\n");
-    add_frame((uint16_t)5, &red);
+    add_frame((uint16_t)1, &red);
 //    red.brightness[0][i][0]=0;
     }
     printf("Go to sleep\n");
     return 0;
 }
+
+
+
+
+
 
