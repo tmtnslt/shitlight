@@ -67,8 +67,8 @@ typedef struct {
     t_bufframe buffer[FRAMES_IN_BUFFER];
     void *buffer_end;
     size_t capacity;
-    size_t count;
-    size_t size_elem;
+    // size_t count; // unneeded, we don't count elements in the ringbuffer
+    // size_t size_elem; //unneeded, all structs are well definded in memorysize
     int pos_write;
     int pos_read;
 } ringbuffer;
@@ -77,21 +77,40 @@ ringbuffer* init_buffer() {
     ringbuffer* rbf;
     rbf = (ringbuffer*) malloc(sizeof(ringbuffer));
     if (rbf == NULL) return (NULL);
+    // set all memory to zero
+    memset(rbf,0,sizeof(ringbuffer));
+    // now initialize our elements
     rbf->pos_write = 1;
     rbf->pos_read = 0;
     rbf->capacity = FRAMES_IN_BUFFER;
-    rbf->size_elem = sizeof(t_bufframe);
+    // rbf->size_elem = sizeof(t_bufframe); //unneeded, see struct
     return (rbf);
 }
 
+// global bool to stop worker thread
 uint8_t is_shutdown;
 
+// global counter for buffer underruns in worker thread
+int16_t bufferunderruns;
+
+// global float for fps
+float fps;
+
+// global pointer to ringbuffer
 ringbuffer *writer_rbf;
 
+// global pointer to LUT
+uint16_t *clut;
+
+uint16_t linear_lut[HELLIGKEITSSTUFEN];
+
+uint16_t user_defined_lut[HELLIGKEITSSTUFEN];
 
 void write_frame(t_memory_frame* frame) {
+    // writes a memory aligned frame to the GPIO
     size_t counter_shift;
     size_t counter_duty;
+    // mask in only our active data ports, so we dont accidentaly use a CLCK or FLUSH pin
     int mask = 0b00000011; // only activate ports that are safe for you!
     for (counter_duty = 0; counter_duty < HELLIGKEITSSTUFEN; counter_duty++) {
         for (counter_shift = 0; counter_shift < (LEDS_PRO_PLATINE * FARBEN_PRO_LED); counter_shift++) {
@@ -111,41 +130,67 @@ void *worker (void* p_rbf) {
     int next_read;
     uint32_t begin = micros();
     uint32_t end = micros()+10;
-    float fps;
+    // we'll use the global rbf for now, so no need to use the pointer from function argument
     //ringbuffer *rbf;
     //rbf = (ringbuffer *) p_rbf;
-    printf("Started Thread\n");
-    while(!is_shutdown) {
-         end = micros();
-         fps = (float)c_rep/(float)((end-begin)/1000000.0);
-         printf("\rFPS: %f", fps);
-	 begin=end;
+    #ifdef _DEBUG
+      printf("Started Thread\n");
+    #endif
+    // reset global status variables
+    fps = 0.0;
+    bufferunderruns = 0;
 
-        //printf("Started a loop\n");
-        //printf("Reading Position is at %i\n", writer_rbf->pos_read);
+    while(!is_shutdown) {
+        end = micros();
+        fps = (float)c_rep/(float)((end-begin)/1000000.0);
+
+        #ifdef _DEBUG
+          printf("\rFPS: %f", fps);
+        #endif
+
+	begin=end;
+
+        #ifdef _VERBOSE
+          printf("Started a loop\n");
+          printf("Reading Position is at %i\n", writer_rbf->pos_read);
+        #endif
+
         // get current element from ringbuffer
         c_frame = writer_rbf->buffer[(writer_rbf->pos_read)].frame;
         c_rep = writer_rbf->buffer[(writer_rbf->pos_read)].rep;
-        //printf("Copied frame from buffer to temporary buffer\n");
-        //printf("Draw this frame %i times\n", c_rep);
+
+        #ifdef _VERBOSE
+          printf("Copied frame from buffer to temporary buffer\n");
+          printf("Draw this frame %i times\n", c_rep);
+        #endif
+
         for (count = 0; count<c_rep; count++) {
-            write_frame(&c_frame);
+          write_frame(&c_frame);
         }
-        //printf("Succesfully drawn frame\n");
+        
+        #ifdef _VERBOSE
+          printf("Succesfully drawn frame\n");
+        #endif
         // check if there is a new frame in the buffer
         // first, increment our read position
         next_read = (writer_rbf->pos_read + 1);
         // check for overflow
-        if (next_read >= (writer_rbf->capacity)) next_read = 0; //could be done faster
+        if (next_read >= (writer_rbf->capacity)) next_read = 0; //if we've fixed the buffer length, we can bitfiddle here.
         // now compare position to head, if they are the same repeat the last frame
         // maybe in reality we need to obtain a lock to be threadsave.
         // but I think because we only read, we just might repeat a frame unnecessarily
         while (next_read==writer_rbf->pos_write) {
             write_frame(&c_frame);
-    //        printf("No more frames\n");
+            bufferunderruns++; // we don't care for overflow, client will have to handle it.
+
+            #ifdef _DEGBUG
+              printf("No more frames, buffer underrun\n");
+            #endif
         }
         writer_rbf->pos_read = next_read;
-        //printf("Done drawing frame\n");
+        #ifdef _VERBOSE
+          printf("Done drawing frame\n");
+        #endif
     }
     return NULL;
 }
@@ -153,17 +198,11 @@ void *worker (void* p_rbf) {
 
 
 
-float get_fps(void); // gives some calculation about the actual speed of the program.
-                     // Might only be available in ltd mode? 
+float get_fps(void) {
+        // gives some calculation about the actual speed of the program.
+        return fps;
+} 
 
-t_memory_frame zero_frame() {
-    int count_b, count_c;
-    t_memory_frame frame;
-    for (count_c = 0; count_c < HELLIGKEITSSTUFEN; count_c++)
-        for (count_b = 0; count_b < LEDS_PRO_PLATINE * FARBEN_PRO_LED; count_b++)
-            frame.cycle[count_c].to_gpio[count_b] = 0;
-    return frame;
-}
 
 int init(void) {
     pthread_t worker_thread;
@@ -179,22 +218,30 @@ int init(void) {
     pinMode(27, OUTPUT);
     pinMode(4, OUTPUT);
 
-    writer_rbf = (ringbuffer*) init_buffer();
-    //TODO first frame element will be random numbers. We should set it to zero.
-    int i;
-    for (i=0; i<FRAMES_IN_BUFFER; i++) {
-    writer_rbf->buffer[i].frame = zero_frame();
-    writer_rbf->buffer[i].rep = 1;
-    }
+    writer_rbf = (ringbuffer*) init_buffer(); //init sets all frames to zero, including reps. make sure the worker loop doesn't get stuck on zero rep counter.
     is_shutdown = 0; 
-    printf("Next Step: Start Thread\n");
+    // Setup LUT
+    uint16_t i;
+    for (i=0;i<HELLIGKEITSSTUFEN;i++) linear_lut[i]=i;
+
+    // point global LUT to linear LUT
+    clut = linear_lut;
+
+    #ifdef _DEBUG
+      printf("Next Step: Start Thread\n");
+    #endif
+
     // start thread
     if (pthread_create(&worker_thread, NULL, worker, writer_rbf)) {
         // some error while creating the thread, TODO
-        printf("Error creating thread\n");
+        #ifdef _DEBUG
+          printf("Error creating thread\n");
+        #endif
         return 0;
     }
-    printf("Created Thread");
+    #ifdef _DEBUG
+      printf("Created Thread");
+    #endif
     // success
     return 1;
 }
@@ -212,7 +259,7 @@ t_bufframe chit2buf(uint16_t rep, t_chitframe* cframe) {
             for (c_plat = 0; c_plat < PLATINEN; c_plat++) {
                 for (c_led = 0; c_led < LEDS_PRO_PLATINE; c_led++) {
                     for (c_rgb = 0; c_rgb < 3; c_rgb++) {
-                        bff.frame.cycle[c_col].to_gpio[(3*(LEDS_PRO_PLATINE-1-c_led)+(2-c_rgb))] |= (cframe->brightness[c_plat][c_led][c_rgb] > c_col) << c_plat;
+                        bff.frame.cycle[c_col].to_gpio[(3*(LEDS_PRO_PLATINE-1-c_led)+(2-c_rgb))] |= (clut[(cframe->brightness[c_plat][c_led][c_rgb])] > c_col) << c_plat;
                     }
                 }
              }
