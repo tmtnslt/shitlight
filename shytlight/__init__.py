@@ -7,7 +7,16 @@ class t_chitframe (ctypes.Structure):
 
 
 # find the shitlight library
-_chit = ctypes.cdll.LoadLibrary(find_library("libshitlight.so."))
+_adr = find_library("libshitlight.so")
+if _adr is None:
+    # test environment? Try again in parent directory
+    _chit = ctypes.cdll.LoadLibrary("./libshitlight.so")
+    if _chit._name is None:
+        # give up
+        raise NameError
+else:
+    _chit = ctypes.cdll.LoadLibrary(_adr)
+print(_chit)
 
 # define the function types
 # why doesn't ctypes do this for us?
