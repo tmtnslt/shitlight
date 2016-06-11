@@ -203,7 +203,7 @@ void *worker (void* p_rbf) {
         #endif
         #if defined(FRAMELIMIT_OPTIONAL) || defined(FRAMELIMIT_ACTIVE)
             left = (LIMIT_MICROS*c_rep)-(micros()-begin);
-            while (left > 10000) {
+            while (left > 1000) {
                 // we were fast than required, enough time to draw more frames
                 #ifdef _DEBUG
                     printf("Frame limiter, draw additional frames. Time to fill: %i\n", left);
