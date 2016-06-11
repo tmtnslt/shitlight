@@ -14,13 +14,21 @@
 #include <memory.h>
 
 #include "chitlight-api.h"
+#include "chitlight-clut.h"
 #include "minwiringPi.h"
 
 // some definitions:
+#define EXT_HELLIGKEITSSTUFEN 256
 #define HELLIGKEITSSTUFEN 1024 
 #define FRAMES_IN_BUFFER 1024
 
+int mask = 0b00000011; // only activate ports that are safe for you!
 
+// activate framelimiter
+#define FRAMELIMIT_ACTIVE
+// set framelimit to 100fps
+// i.e. time to draw a frame is 10000 mu s
+#define LIMIT_MICROS 10000
 // TODO: unify the hardware commands into one external dependency.
 // SET PIN CONSTANTS
 
@@ -102,16 +110,11 @@ ringbuffer *writer_rbf;
 // global pointer to LUT
 uint16_t *clut;
 
-uint16_t linear_lut[HELLIGKEITSSTUFEN];
-
-uint16_t user_defined_lut[HELLIGKEITSSTUFEN];
-
 void write_frame(t_memory_frame* frame) {
     // writes a memory aligned frame to the GPIO
     size_t counter_shift;
     size_t counter_duty;
     // mask in only our active data ports, so we dont accidentaly use a CLCK or FLUSH pin
-    int mask = 0b00000011; // only activate ports that are safe for you!
     for (counter_duty = 0; counter_duty < HELLIGKEITSSTUFEN; counter_duty++) {
         for (counter_shift = 0; counter_shift < (LEDS_PRO_PLATINE * FARBEN_PRO_LED); counter_shift++) {
             // use digitalwritebyte for now, however we could also use our own function
@@ -130,6 +133,7 @@ void *worker (void* p_rbf) {
     int next_read;
     uint32_t begin = micros();
     uint32_t end = micros()+10;
+    int32_t left = 0;
     // we'll use the global rbf for now, so no need to use the pointer from function argument
     //ringbuffer *rbf;
     //rbf = (ringbuffer *) p_rbf;
@@ -142,15 +146,18 @@ void *worker (void* p_rbf) {
 
     while(!is_shutdown) {
         end = micros();
+        #ifdef _DEBUG
+          printf("TIME: %i\t", end);
+        #endif
         fps = (float)c_rep/(float)((end-begin)/1000000.0);
 
         #ifdef _DEBUG
-          printf("\rFPS: %f", fps);
+          printf("FPS: %f\n", fps);
         #endif
 
 	begin=end;
 
-        #ifdef _VERBOSE
+        #ifdef _DEBUG
           printf("Started a loop\n");
           printf("Reading Position is at %i\n", writer_rbf->pos_read);
         #endif
@@ -159,7 +166,7 @@ void *worker (void* p_rbf) {
         c_frame = writer_rbf->buffer[(writer_rbf->pos_read)].frame;
         c_rep = writer_rbf->buffer[(writer_rbf->pos_read)].rep;
 
-        #ifdef _VERBOSE
+        #ifdef _DEBUG
           printf("Copied frame from buffer to temporary buffer\n");
           printf("Draw this frame %i times\n", c_rep);
         #endif
@@ -187,6 +194,27 @@ void *worker (void* p_rbf) {
               printf("No more frames, buffer underrun\n");
             #endif
         }
+        // check if frame limiter is active
+        #ifdef FRAMELIMIT_OPTIONAL
+        if (limitframes) {
+        #endif
+        #ifdef FRAMELIMIT_ACTIVE
+        if (1) {
+        #endif
+        #if defined(FRAMELIMIT_OPTIONAL) || defined(FRAMELIMIT_ACTIVE)
+            left = (LIMIT_MICROS*c_rep)-(micros()-begin);
+            while (left > 10000) {
+                // we were fast than required, enough time to draw more frames
+                #ifdef _DEBUG
+                    printf("Frame limiter, draw additional frames. Time to fill: %i\n", left);
+                #endif
+                write_frame(&c_frame);
+                left = (LIMIT_MICROS*c_rep)-(micros()-begin);
+            }
+            // still time left, but too much to for a new frame, just burn some time
+            if (left > 0) delayMicroseconds(left);
+        }
+        #endif
         writer_rbf->pos_read = next_read;
         #ifdef _VERBOSE
           printf("Done drawing frame\n");
@@ -220,12 +248,8 @@ int init(void) {
 
     writer_rbf = (ringbuffer*) init_buffer(); //init sets all frames to zero, including reps. make sure the worker loop doesn't get stuck on zero rep counter.
     is_shutdown = 0; 
-    // Setup LUT
-    uint16_t i;
-    for (i=0;i<HELLIGKEITSSTUFEN;i++) linear_lut[i]=i;
-
-    // point global LUT to linear LUT
-    clut = linear_lut;
+    // point global LUT to cie LUT
+    clut = clut_cie;
 
     #ifdef _DEBUG
       printf("Next Step: Start Thread\n");
@@ -259,6 +283,10 @@ t_bufframe chit2buf(uint16_t rep, t_chitframe* cframe) {
             for (c_plat = 0; c_plat < PLATINEN; c_plat++) {
                 for (c_led = 0; c_led < LEDS_PRO_PLATINE; c_led++) {
                     for (c_rgb = 0; c_rgb < 3; c_rgb++) {
+                        #ifdef _VERBOSE
+                        if ((cframe->brightness[c_plat][c_led][c_rgb])!=0) {
+                        printf("%i",clut[(cframe->brightness[c_plat][c_led][c_rgb])]); }
+                        #endif
                         bff.frame.cycle[c_col].to_gpio[(3*(LEDS_PRO_PLATINE-1-c_led)+(2-c_rgb))] |= (clut[(cframe->brightness[c_plat][c_led][c_rgb])] > c_col) << c_plat;
                     }
                 }
@@ -280,7 +308,9 @@ void add_frame(uint16_t rep, t_chitframe* frame) {
         // Wait for reader to advance
         sleep(1);
     }
-    //printf("Inserting frame into buffer at position %i\n", next);
+    #ifdef _DEBUG
+    printf("Inserting frame into buffer at position %i\n", next);
+    #endif
     writer_rbf->buffer[next] = chit2buf(rep, frame);
     // move write head ahead, free access for reader
     writer_rbf->pos_write = next+1;
@@ -337,27 +367,27 @@ int main(void) {
           i = abs(j)-4;
           memset(&f, 0, sizeof(t_chitframe));
           if((i-5)>=0)
-              f.brightness[0][i-5][l] = 1024/32;
+              f.brightness[0][i-5][l] = 255/32;
           if((i-4)>=0)
-              f.brightness[0][i-4][l] = 1024/16;
+              f.brightness[0][i-4][l] = 255/16;
           if((i-3)>=0)
-              f.brightness[0][i-3][l] = 1024/8;
+              f.brightness[0][i-3][l] = 255/8;
           if((i-2)>=0) 
-              f.brightness[0][i-2][l] = 1024/4;
+              f.brightness[0][i-2][l] = 255/4;
           if((i-1)>=0) 
-              f.brightness[0][i-1][l] = 1024/2;
+              f.brightness[0][i-1][l] = 255/2;
           if((i>=0) && (i<8)) 
-              f.brightness[0][i][l] = 1024;
+              f.brightness[0][i][l] = 255;
           if((i+1)<8) 
-              f.brightness[0][i+1][l]= 1024/2;
+              f.brightness[0][i+1][l]= 255/2;
           if((i+2)<8) 
-              f.brightness[0][i+2][l] = 1024/4;
+              f.brightness[0][i+2][l] = 255/4;
           if((i+3)<8)
-              f.brightness[0][i+3][l] = 1024/8; 
+              f.brightness[0][i+3][l] = 255/8; 
           if((i+4)<8)
-              f.brightness[0][i+4][l] = 1024/16; 
+              f.brightness[0][i+4][l] = 255/16; 
           if((i+5)<8)
-              f.brightness[0][i+5][l] = 1024/32; 
+              f.brightness[0][i+5][l] = 255/32; 
           add_frame((uint16_t)k/5, &f);
        }
        if((k>25) && (flip==1)) {
@@ -421,9 +451,9 @@ int old_main(void) {
 	colorvec_b[i] /= sqrt(norm_b);
     }
     for(i=0;i<8;i++) {
-         red.brightness[0][i][0]= (uint16_t)(powf(fabs(colorvec_r[i]), gamma)*1023.0)&0x3FF;
-         red.brightness[0][i][1]= (uint16_t)(powf(fabs(colorvec_g[i]), gamma)*1023.0)&0x3FF;
-         red.brightness[0][i][2]= (uint16_t)(powf(fabs(colorvec_b[i]), gamma)*1023.0)&0x3FF;
+         red.brightness[0][i][0]= (uint16_t)(powf(fabs(colorvec_r[i]), gamma)*255.0)&0xFF;
+         red.brightness[0][i][1]= (uint16_t)(powf(fabs(colorvec_g[i]), gamma)*255.0)&0xFF;
+         red.brightness[0][i][2]= (uint16_t)(powf(fabs(colorvec_b[i]), gamma)*255.0)&0xFF;
     }
 //    red.brightness[1][6][1]=255;
     //printf("Send frame to thread\n");

@@ -3,7 +3,7 @@ from ctypes.util import find_library
 
 # define frame class
 class t_chitframe (ctypes.Structure):
-    _fields_ = [("brightness", ((ctypes.c_uint16 * 3) * 8 * 2))]
+    _fields_ = [("brightness", ((ctypes.c_uint8 * 3) * 8 * 2))]
 
 
 # find the shitlight library

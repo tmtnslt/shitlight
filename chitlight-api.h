@@ -11,7 +11,7 @@
 #define FARBEN_PRO_LED 3
 
 typedef struct {
-     uint16_t brightness[PLATINEN][LEDS_PRO_PLATINE][FARBEN_PRO_LED];
+     uint8_t brightness[PLATINEN][LEDS_PRO_PLATINE][FARBEN_PRO_LED];
 } t_chitframe;
 
 

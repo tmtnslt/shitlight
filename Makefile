@@ -11,3 +11,6 @@ minwiringPi/minwiringPi.o : minwiringPi/minwiringPi.c
 
 demo : chitlight-api.o minwiringPi/minwiringPi.o
 	gcc -o chitlightdemo chitlight-api.o minwiringPi/minwiringPi.o -lm -lpthread
+
+debug : minwiringPi/minwiringPi.o
+	gcc -shared -Wl,-soname,libshitlight.so -o libshitlight.so -fPIC -D_DEBUG -I minwiringPi/ chitlight-api.c minwiringPi/minwiringPi.o -lm -lpthread
