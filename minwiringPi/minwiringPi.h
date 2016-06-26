@@ -33,6 +33,20 @@
 #  define	FALSE	(!TRUE)
 #endif
 
+
+// Settings for use with chitlight
+
+#define BEGIN_DATA_BLOCK 15
+#define BEGIN_CLOCK_BLOCK 20
+#define BEGIN_RESET_BLOCK 25
+
+#define CLOCK_DELAY 1
+// reset delay is currently commented out
+#define RESET_DELAY 0
+
+
+
+
 // Handy defines
 
 // wiringPi modes
@@ -135,6 +149,15 @@ void         delay             (unsigned int howLong) ;
 void         delayMicroseconds (unsigned int howLong) ;
 unsigned int millis            (void) ;
 unsigned int micros            (void) ;
+
+void delayMicrosecondsHard (unsigned int howLong);
+
+
+// New Functions for chitlight
+
+void blk_cycle_clock(void);
+void blk_flush(void);
+void blk_write_data(int value);
 
 #ifdef __cplusplus
 }

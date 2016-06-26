@@ -42,7 +42,6 @@ int mask = 0b00000011; // only activate ports that are safe for you!
 // the normal programm!
 #define CL_DATA 17
 
-
 // cycle the clock once to shift the data through the registers
 void man_cycle_clock(void) {
     digitalWrite(CL_CLOCK,1);
@@ -119,10 +118,10 @@ void write_frame(t_memory_frame* frame) {
         for (counter_shift = 0; counter_shift < (LEDS_PRO_PLATINE * FARBEN_PRO_LED); counter_shift++) {
             // use digitalwritebyte for now, however we could also use our own function
             // where we set all DATA pins to zero and then those to one which should be one before cycling
-            digitalWriteByte(frame->cycle[counter_duty].to_gpio[counter_shift] & mask);
-            man_cycle_clock();
+            blk_write_data(frame->cycle[counter_duty].to_gpio[counter_shift] & mask);
+            blk_cycle_clock();
         }
-        man_flush();
+        blk_flush();
     }
 }
 
@@ -237,14 +236,13 @@ int init(void) {
     // does the initialization: creates ring buffer, initializes the gpio pins
     // and starts the thread
     wiringPiSetup();
-
-    pinMode(23, OUTPUT);
-    pinMode(24, OUTPUT);
-    pinMode(25, OUTPUT);
-    pinMode(17, OUTPUT);
-    pinMode(18, OUTPUT);
-    pinMode(27, OUTPUT);
-    pinMode(4, OUTPUT);
+    int i;
+    // initialize bulk ports
+    for (i=0;i<5;i++) {
+        pinMode(BEGIN_DATA_BLOCK+i, OUTPUT);
+        pinMode(BEGIN_CLOCK_BLOCK+i, OUTPUT);
+        pinMode(BEGIN_RESET_BLOCK+i, OUTPUT);
+    }
 
     writer_rbf = (ringbuffer*) init_buffer(); //init sets all frames to zero, including reps. make sure the worker loop doesn't get stuck on zero rep counter.
     is_shutdown = 0; 
