@@ -42,7 +42,7 @@
 
 #define CLOCK_DELAY 1
 // reset delay is currently commented out
-#define RESET_DELAY 0
+#define RESET_DELAY 1
 
 
 

@@ -34,10 +34,8 @@ int mask = 0b00000011; // only activate ports that are safe for you!
 
 // set the value to the GPIO pin you connected the reset latch
 // and clock to
-#define CL_RESET 24
-#define CL_RESET2 4
-#define CL_CLOCK 23
-#define CL_CLOCK2 25
+#define CL_RESET 11
+#define CL_CLOCK 5
 
 // this defines a data pin. It is only used
 // for debug purposes and shouldn't affect
@@ -47,20 +45,16 @@ int mask = 0b00000011; // only activate ports that are safe for you!
 // cycle the clock once to shift the data through the registers
 void man_cycle_clock(void) {
     digitalWrite(CL_CLOCK,1);
-    digitalWrite(CL_CLOCK2,1);
     delayMicroseconds(1);
     digitalWrite(CL_CLOCK,0);
-    digitalWrite(CL_CLOCK2,0);
 }
 
 // activate the data in the registers by cycling the reset latch
 // (it's actually not called reset, but I keep calling it that)
 void man_flush(void) {
     digitalWrite(CL_RESET,1);
-    digitalWrite(CL_RESET2,1);
 //    delayMicroseconds(2);
     digitalWrite(CL_RESET,0);
-    digitalWrite(CL_RESET2,0);
 }
 
 
@@ -245,6 +239,7 @@ int init(void) {
     // and starts the thread
     wiringPiSetup();
     int i;
+    printf("%i",BEGIN_DATA_BLOCK);
     // initialize bulk ports
     for (i=0;i<5;i++) {
         pinMode(BEGIN_DATA_BLOCK+i, OUTPUT);

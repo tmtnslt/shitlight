@@ -6,7 +6,7 @@
 */
 
 // some definitions:
-#define PLATINEN 2
+#define PLATINEN 5
 #define LEDS_PRO_PLATINE 8
 #define FARBEN_PRO_LED 3
 

@@ -467,11 +467,11 @@ void blk_cycle_clock(void) {
     // cycle all the clocks at once to shift the data through the registers
     // adresses are from minwiringPi.h
     // first set clocks to one
-    *(gpio + gpioToGPSET [0]) = 0x5 << BEGIN_CLOCK_BLOCK;
+    *(gpio + gpioToGPSET [0]) = (0x1f << (BEGIN_CLOCK_BLOCK));
     // now wait to accomodate for slow flank caused by long cables
-    delayMicrosecondsHards(CLOCK_DELAY);
+    delayMicroseconds(CLOCK_DELAY);
     // set clocks back to zero
-    *(gpio + gpioToGPCLR [0]) = 0x5 << BEGIN_CLOCK_BLOCK;
+    *(gpio + gpioToGPCLR [0]) = (0x1f << (BEGIN_CLOCK_BLOCK));
 }
 
 void blk_flush(void) {
@@ -480,15 +480,15 @@ void blk_flush(void) {
    // there is improvement potential if we switch back to zero only at the beginning
    // of the next frame... Might give that extra delay on the pulse width needed for
    // long cables!
-   *(gpio + gpioToGPSET[0]) = 0x5 << BEGIN_RESET_BLOCK;
-   // delayMicrosecondsHard(RESET_DELAY); // <-- activate if needed
-   *(gpio + gpioToGPCLR[0]) = 0x5 << BEGIN_RESET_BLOCK;
+   *(gpio + gpioToGPSET[0]) = (0x1f << BEGIN_RESET_BLOCK);
+   //delayMicroseconds(RESET_DELAY); // <-- activate if needed
+   *(gpio + gpioToGPCLR[0]) = (0x1f << BEGIN_RESET_BLOCK);
 }
 
 void blk_write_data(int value) {
    // cycle the clock once to shift the data through the registers
-  *(gpio + gpioToGPCLR[0]) = 0x5 << BEGIN_DATA_BLOCK;
-  *(gpio + gpioToGPSET[0]) = (value & 0x5) << BEGIN_DATA_BLOCK;
+  *(gpio + gpioToGPCLR[0]) = 0x1f << BEGIN_DATA_BLOCK;
+  *(gpio + gpioToGPSET[0]) = (value & 0x1f) << BEGIN_DATA_BLOCK;
 }
 
 /*

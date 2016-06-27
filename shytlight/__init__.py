@@ -3,7 +3,7 @@ from ctypes.util import find_library
 import numpy 
 # define frame class
 class t_chitframe (ctypes.Structure):
-    _fields_ = [("brightness", ((ctypes.c_uint8 * 3) * 8 * 2))]
+    _fields_ = [("brightness", ((ctypes.c_uint8 * 3) * 8 * 5))]
 
 
 # find the shitlight library
@@ -41,8 +41,10 @@ def add_frame(rep, frame):
         _chit.add_frame(rep, ctypes.byref(frame))
     elif type(frame) is numpy.ndarray:
         temp_frame = t_chitframe()
+        xframe = frame.ctypes.data_as(ctypes.POINTER(((ctypes.c_uint8 * 3) * 8 * 5)))
+        temp_frame.brightness = xframe.contents
         # temp_frame.brightness = numpy.ctypeslib.as_ctypes(frame.astype("ubyte"))
-        temp_frame.brightness = numpy.ctypeslib.as_ctypes(numpy.ascontiguousarray(frame.astype("ubyte")))
+        # temp_frame.brightness = numpy.ctypeslib.as_ctypes(numpy.ascontiguousarray(frame.astype("ubyte")))
         _chit.add_frame(rep, ctypes.byref(temp_frame))
     else:
         # not implemented yet
