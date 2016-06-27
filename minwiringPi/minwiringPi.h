@@ -36,9 +36,9 @@
 
 // Settings for use with chitlight
 
-#define BEGIN_DATA_BLOCK 15
-#define BEGIN_CLOCK_BLOCK 20
-#define BEGIN_RESET_BLOCK 25
+#define BEGIN_DATA_BLOCK 0
+#define BEGIN_CLOCK_BLOCK 5
+#define BEGIN_RESET_BLOCK 10
 
 #define CLOCK_DELAY 1
 // reset delay is currently commented out
