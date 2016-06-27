@@ -19,13 +19,13 @@
 
 // some definitions:
 #define EXT_HELLIGKEITSSTUFEN 256
-#define HELLIGKEITSSTUFEN 1024 
+#define HELLIGKEITSSTUFEN 256 
 #define FRAMES_IN_BUFFER 1024
 
 int mask = 0b00000011; // only activate ports that are safe for you!
 
 // activate framelimiter
-#define FRAMELIMIT_ACTIVE
+#define NOFRAMELIMIT_ACTIVE
 // set framelimit to 100fps
 // i.e. time to draw a frame is 10000 mu s
 #define LIMIT_MICROS 10000
@@ -35,7 +35,9 @@ int mask = 0b00000011; // only activate ports that are safe for you!
 // set the value to the GPIO pin you connected the reset latch
 // and clock to
 #define CL_RESET 24
+#define CL_RESET2 4
 #define CL_CLOCK 23
+#define CL_CLOCK2 25
 
 // this defines a data pin. It is only used
 // for debug purposes and shouldn't affect
@@ -45,14 +47,20 @@ int mask = 0b00000011; // only activate ports that are safe for you!
 // cycle the clock once to shift the data through the registers
 void man_cycle_clock(void) {
     digitalWrite(CL_CLOCK,1);
+    digitalWrite(CL_CLOCK2,1);
+    delayMicroseconds(1);
     digitalWrite(CL_CLOCK,0);
+    digitalWrite(CL_CLOCK2,0);
 }
 
 // activate the data in the registers by cycling the reset latch
 // (it's actually not called reset, but I keep calling it that)
 void man_flush(void) {
     digitalWrite(CL_RESET,1);
+    digitalWrite(CL_RESET2,1);
+//    delayMicroseconds(2);
     digitalWrite(CL_RESET,0);
+    digitalWrite(CL_RESET2,0);
 }
 
 
@@ -107,7 +115,7 @@ float fps;
 ringbuffer *writer_rbf;
 
 // global pointer to LUT
-uint16_t *clut;
+uint8_t *clut;
 
 void write_frame(t_memory_frame* frame) {
     // writes a memory aligned frame to the GPIO
@@ -248,6 +256,7 @@ int init(void) {
     is_shutdown = 0; 
     // point global LUT to cie LUT
     clut = clut_cie;
+//    clut = clut_linear;
 
     #ifdef _DEBUG
       printf("Next Step: Start Thread\n");

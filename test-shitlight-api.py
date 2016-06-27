@@ -10,16 +10,17 @@ test_green = shytlight.t_chitframe()
 test_blue = shytlight.t_chitframe()
 
 # make all leds on platine 0 red
-for i in range(8):
-    test_green.brightness[0][i][0] = 0x2f
-    test_green.brightness[0][i][1] = 0x41
-    test_green.brightness[0][i][2] = 0x93
-    test_red.brightness[0][i][0] = 0x4f
-    test_red.brightness[0][i][1] = 0x2f
-    test_red.brightness[0][i][2] = 0x93
-    test_blue.brightness[0][i][0] = 0x2f
-    test_blue.brightness[0][i][1] = 0x74
-    test_blue.brightness[0][i][2] = 0x93
+for j in range(2):
+  for i in range(8):
+    test_green.brightness[j][i][0] = 0x00
+    test_green.brightness[j][i][1] = 0x00
+    test_green.brightness[j][i][2] = 0xff
+    test_red.brightness[j][i][0] = 0x00
+    test_red.brightness[j][i][1] = 0x00
+    test_red.brightness[j][i][2] = 0xff
+    test_blue.brightness[j][i][0] = 0xff
+    test_blue.brightness[j][i][1] = 0x00
+    test_blue.brightness[j][i][2] = 0x00
 
 # add frame to thread
 shytlight.add_frame(200, test_green) 

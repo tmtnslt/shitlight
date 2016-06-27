@@ -20,13 +20,12 @@ n_channel = len(brights)
 
 # Reset all LED
 for i in range(n_channel-1, -1, -1):
-    GPIO.output(_SER_pin, GPIO.HIGH)
+    GPIO.output(_SER_pin, GPIO.LOW)
     GPIO.output(_SRCLK_pin, GPIO.HIGH) 
     GPIO.output(_SRCLK_pin, GPIO.LOW) 
 GPIO.output(_RCLK_pin, GPIO.HIGH) 
 GPIO.output(_RCLK_pin, GPIO.LOW) 
 
-time.sleep(10000000000)
 GPIO.output(_SER_pin, GPIO.LOW)
 GPIO.output(_SRCLK_pin, GPIO.HIGH) 
 GPIO.output(_SRCLK_pin, GPIO.LOW) 

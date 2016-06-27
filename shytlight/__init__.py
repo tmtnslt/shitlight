@@ -1,6 +1,6 @@
 import ctypes
 from ctypes.util import find_library
-
+import numpy 
 # define frame class
 class t_chitframe (ctypes.Structure):
     _fields_ = [("brightness", ((ctypes.c_uint8 * 3) * 8 * 2))]
@@ -39,6 +39,11 @@ def add_frame(rep, frame):
     # test if frame is internal format or needs to be converted
     if type(frame) is t_chitframe:
         _chit.add_frame(rep, ctypes.byref(frame))
+    elif type(frame) is numpy.ndarray:
+        temp_frame = t_chitframe()
+        # temp_frame.brightness = numpy.ctypeslib.as_ctypes(frame.astype("ubyte"))
+        temp_frame.brightness = numpy.ctypeslib.as_ctypes(numpy.ascontiguousarray(frame.astype("ubyte")))
+        _chit.add_frame(rep, ctypes.byref(temp_frame))
     else:
         # not implemented yet
         raise NotImplementedError
