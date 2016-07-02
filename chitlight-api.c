@@ -22,7 +22,7 @@
 #define HELLIGKEITSSTUFEN 256 
 #define FRAMES_IN_BUFFER 1024
 
-int mask = 0b00000011; // only activate ports that are safe for you!
+int mask = 0b00011111; // only activate ports that are safe for you!
 
 // activate framelimiter
 #define NOFRAMELIMIT_ACTIVE

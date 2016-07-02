@@ -40,13 +40,16 @@ def add_frame(rep, frame):
     if type(frame) is t_chitframe:
         _chit.add_frame(rep, ctypes.byref(frame))
     elif type(frame) is numpy.ndarray:
-        temp_frame = t_chitframe()
-        xframe = frame.ctypes.data_as(ctypes.POINTER(((ctypes.c_uint8 * 3) * 8 * 5)))
-        temp_frame.brightness = xframe.contents
-        # temp_frame.brightness = numpy.ctypeslib.as_ctypes(frame.astype("ubyte"))
-        # temp_frame.brightness = numpy.ctypeslib.as_ctypes(numpy.ascontiguousarray(frame.astype("ubyte")))
+        temp_frame = transform(frame) 
         _chit.add_frame(rep, ctypes.byref(temp_frame))
     else:
         # not implemented yet
         raise NotImplementedError
 
+def transform(frame):
+     temp_frame = t_chitframe()
+     for i in range(5):
+          for j in range(8):
+              for k in range(3):
+                  temp_frame.brightness[i][j][k] = ctypes.c_uint8(frame[i,j,k].astype("ubyte"))
+     return temp_frame
