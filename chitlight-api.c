@@ -12,10 +12,12 @@
 #include <stdlib.h>
 #include <math.h>
 #include <memory.h>
+#include <alsa/asoundlib.h>
 
 #include "chitlight-api.h"
 #include "chitlight-clut.h"
 #include "minwiringPi.h"
+#include "BTrack/BTrack.h"
 
 // some definitions:
 #define EXT_HELLIGKEITSSTUFEN 256
@@ -31,6 +33,8 @@ int mask = 0b00011111; // only activate ports that are safe for you!
 #define LIMIT_MICROS 10000
 // TODO: unify the hardware commands into one external dependency.
 // SET PIN CONSTANTS
+
+#define BPM_NORMAL 120.0
 
 // set the value to the GPIO pin you connected the reset latch
 // and clock to
@@ -70,6 +74,7 @@ typedef struct {
 typedef struct {
     t_memory_frame frame;
     uint16_t rep;
+    uint8_t on_beat;
 } t_bufframe;
 
 typedef struct {
@@ -98,12 +103,22 @@ ringbuffer* init_buffer() {
 
 // global bool to stop worker thread
 uint8_t is_shutdown;
+uint8_t analysis_shutdown;
 
 // global counter for buffer underruns in worker thread
 int16_t bufferunderruns;
 
 // global float for fps
 float fps;
+
+// global float for bpm
+float bpm;
+
+//global long counted beats
+uint32_t count_beats;
+
+// global state for enforcing beat sync
+uint8_t sync_beats;
 
 // global pointer to ringbuffer
 ringbuffer *writer_rbf;
@@ -130,11 +145,15 @@ void write_frame(t_memory_frame* frame) {
 void *worker (void* p_rbf) {
     t_memory_frame c_frame;
     uint16_t c_rep=1;
+    uint8_t c_on_beat = 0;
     uint16_t count;
     int next_read;
+    int look_ahead;
     uint32_t begin = micros();
     uint32_t end = micros()+10;
     int32_t left = 0;
+    uint32_t internal_beats = 0;
+
     // we'll use the global rbf for now, so no need to use the pointer from function argument
     //ringbuffer *rbf;
     //rbf = (ringbuffer *) p_rbf;
@@ -162,11 +181,19 @@ void *worker (void* p_rbf) {
           printf("Started a loop\n");
           printf("Reading Position is at %i\n", writer_rbf->pos_read);
         #endif
-
         // get current element from ringbuffer
         c_frame = writer_rbf->buffer[(writer_rbf->pos_read)].frame;
         c_rep = writer_rbf->buffer[(writer_rbf->pos_read)].rep;
+	c_on_beat = writer_rbf->buffer[(writer_rbf->pos_read)].on_beat;
 
+	if (sync_beats > 0 ) {
+		// resize c_rep according to bpm count
+		c_rep = (int) bpm/BPM_NORMAL;
+		if (sync_beats > 10) {
+			if (c_on_beat == 1) internal_beats++;
+			if (internal_beats > count_beats) internal_beats = count_beats; // counter reset externally
+		}
+	}
         #ifdef _DEBUG
           printf("Copied frame from buffer to temporary buffer\n");
           printf("Draw this frame %i times\n", c_rep);
@@ -216,6 +243,32 @@ void *worker (void* p_rbf) {
             if (left > 0) delayMicroseconds(left);
         }
         #endif
+	// process beatsync
+	if (sync_beats > 10) {
+		if (writer_rbf->buffer[next_read].on_beat == 1) {
+			// next frame should sync on beat
+			// check beat counter
+			while (internal_beats == count_beats) { // waiting for next beat, repeat frame
+				write_frame(&c_frame);
+			}
+		}
+		else {
+			if (internal_beats < count_beats) { //we're running behind
+				look_ahead = next_read +1;
+				do {
+        				if (look_ahead >= (writer_rbf->capacity)) look_ahead = 0; //if we've fixed the buffer length, we can bitfiddle here.
+					if (look_ahead== (writer_rbf->pos_write)) { // we searched all available frames, no beat frame available, continue normal
+						look_ahead = next_read;
+						break;
+					}
+				} while(writer_rbf->buffer[look_ahead].on_beat != 1);
+				next_read = look_ahead;
+			}
+		}
+	}
+
+
+
         writer_rbf->pos_read = next_read;
         #ifdef _VERBOSE
           printf("Done drawing frame\n");
@@ -225,12 +278,152 @@ void *worker (void* p_rbf) {
 }
 
 
+void *analysis_worker (char* str_alsa_device) {
+    int err;
+    int16_t *buffer;
+    int buffer_frames = 1024;
+    unsigned int rate = 44100;
+    snd_pcm_t *capture_handle;
+    snd_pcm_hw_params_t *hw_params;
+    snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
+  
+    if ((err = snd_pcm_open (&capture_handle, str_alsa_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+      fprintf (stderr, "cannot open audio device %s (%s)\n", 
+               str_alsa_device,
+               snd_strerror (err));
+      exit (1);
+    }
+  
+    fprintf(stdout, "audio interface opened\n");
+  		   
+    if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+      fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  
+    fprintf(stdout, "hw_params allocated\n");
+  				 
+    if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
+      fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  
+    fprintf(stdout, "hw_params initialized\n");
+  	
+    if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
+      fprintf (stderr, "cannot set access type (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+      
+  
+    fprintf(stdout, "hw_params access setted\n");
+  	
+    if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, format)) < 0) {
+      fprintf (stderr, "cannot set sample format (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  
+    fprintf(stdout, "hw_params format setted\n");
+  	
+    if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
+      fprintf (stderr, "cannot set sample rate (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  	
+    fprintf(stdout, "hw_params rate setted\n");
+  
+    if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 1)) < 0) {
+      fprintf (stderr, "cannot set channel count (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  
+    fprintf(stdout, "hw_params channels setted\n");
+  	
+    if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
+      fprintf (stderr, "cannot set parameters (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  
+  
+    fprintf(stdout, "hw_params setted\n");
+  	
+    snd_pcm_hw_params_free (hw_params);
+  
+    fprintf(stdout, "hw_params freed\n");
+  	
+    if ((err = snd_pcm_prepare (capture_handle)) < 0) {
+      fprintf (stderr, "cannot prepare audio interface for use (%s)\n",
+               snd_strerror (err));
+      exit (1);
+    }
+  
+    fprintf(stdout, "audio interface prepared\n");
+  
+    buffer = (int16_t*) malloc(buffer_frames * snd_pcm_format_width(format) / 8);
+  //  dbuffer = (double*)malloc(buffer_frames * 64 / 8);
+  
+    fprintf(stdout, "buffer allocated\n");
+  
+    BTrack b(buffer_frames/2);
+  
+    fprintf(stdout, "initialized analyzer\n");
+  
+    while (!analysis_shutdown) {
+      if ((err = snd_pcm_readi (capture_handle, buffer, buffer_frames)) != buffer_frames) {
+        fprintf (stderr, "read from audio interface failed (%s)\n",
+                 err, snd_strerror (err));
+        exit (1);
+      }
+      if (sync_beats > 10) {
+  	    b.processAudioFrameInt(buffer);
+  	    bpm = (float) b.getCurrentTempoEstimate();
+  	    if (b.beatDueInCurrentFrame()) count_beats++;
+  #ifdef _DEBUG
+  	    fprintf(stderr,"tempo: %.2f\n",b.getCurrentTempoEstimate());
+  #endif
+      }
+    }
+  
+    free(buffer);
+  
+    fprintf(stdout, "buffer freed\n");
+  	
+    snd_pcm_close (capture_handle);
+    fprintf(stdout, "audio interface closed\n");
+  
+  
+    return NULL;
 
+}
 
 float get_fps(void) {
         // gives some calculation about the actual speed of the program.
         return fps;
 } 
+
+float get_bpm(void) {
+	return bpm;
+}
+
+int set_bpm(float _bpm) {
+	bpm = _bpm;
+	return 1;
+}
+
+int get_analysis_state(void);
+
+int init_analysis(void);
+
+int stop_analysis(void);
+
+int beat_sync(uint8_t enabled);
 
 
 int init(void) {
@@ -248,7 +441,11 @@ int init(void) {
     }
 
     writer_rbf = (ringbuffer*) init_buffer(); //init sets all frames to zero, including reps. make sure the worker loop doesn't get stuck on zero rep counter.
-    is_shutdown = 0; 
+    is_shutdown = 0;
+    analysis_shutdown = 0;
+    bpm = 120;
+    count_beats = 0;
+    sync_beats = 0;
     // point global LUT to cie LUT
     clut = clut_cie;
 //    clut = clut_linear;
@@ -276,7 +473,7 @@ int init_ltd(void); // basically the same, however we will start the thread whic
                     // in a time limited fashion so we can expect some near constant frames per second
 
 
-t_bufframe chit2buf(uint16_t rep, t_chitframe* cframe) {
+t_bufframe chit2buf(uint16_t rep, uint8_t on_beat, t_chitframe* cframe) {
         t_bufframe bff;
         memset(&bff,0,sizeof(t_bufframe));
         // TODO: Optimize this
@@ -295,11 +492,12 @@ t_bufframe chit2buf(uint16_t rep, t_chitframe* cframe) {
              }
         }
         bff.rep = rep;
+	bff.on_beat = on_beat;
         return bff;
 }
 
 
-void add_frame(uint16_t rep, t_chitframe* frame) {
+void add_frame(uint16_t rep, uint8_t on_beat, t_chitframe* frame) {
     // align a frame to optimal memory layout and add to the ring buffer
     // to be drawn (rep) times. This call will block if the ring buffer is full
 
@@ -313,7 +511,7 @@ void add_frame(uint16_t rep, t_chitframe* frame) {
     #ifdef _DEBUG
     printf("Inserting frame into buffer at position %i\n", next);
     #endif
-    writer_rbf->buffer[next] = chit2buf(rep, frame);
+    writer_rbf->buffer[next] = chit2buf(rep, on_beat, frame);
     // move write head ahead, free access for reader
     writer_rbf->pos_write = next+1;
 }
@@ -390,7 +588,7 @@ int main(void) {
               f.brightness[0][i+4][l] = 255/16; 
           if((i+5)<8)
               f.brightness[0][i+5][l] = 255/32; 
-          add_frame((uint16_t)k/5, &f);
+          add_frame((uint16_t)k/5, 0, &f);
        }
        if((k>25) && (flip==1)) {
          k--;
@@ -459,7 +657,7 @@ int old_main(void) {
     }
 //    red.brightness[1][6][1]=255;
     //printf("Send frame to thread\n");
-    add_frame((uint16_t)1, &red);
+    add_frame((uint16_t)1, 0,&red);
 //    red.brightness[0][i][0]=0;
     }
     printf("Go to sleep\n");
