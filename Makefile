@@ -10,7 +10,8 @@ minwiringPi/minwiringPi.o : minwiringPi/minwiringPi.c
 	gcc -c -fPIC minwiringPi/minwiringPi.c -o minwiringPi/minwiringPi.o
 
 BTrack/BTrack.o : BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp
-	g++ -c -fPIC BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -o BTrack/BTrack.o -DUSE_FFTW
+	g++ -c -fPIC BTrack/OnsetDetectionFunction.cpp -o BTrack/OnsetDetectionFunction.o -DUSE_FFTW
+	g++ -c -fPIC BTrack/BTrack.cpp -o BTrack/BTrack.o -DUSE_FFTW
 
 demo : chitlight-api.o minwiringPi/minwiringPi.o
 	g++ -o chitlightdemo chitlight-api.o minwiringPi/minwiringPi.o -lm -lpthread
