@@ -18,6 +18,8 @@ typedef struct {
 float get_fps(void); // gives some calculation about the actual speed of the program.
                      // Might only be available in ltd mode? 
 
+int get_fps_limit(void); // returns the value of the fps limit for calculating appropiate repeats
+
 int init(void); // does the initialization: creates ring buffer, initializes the gpio pins
     // and starts the thread
 
