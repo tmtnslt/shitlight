@@ -278,7 +278,7 @@ void *worker (void* p_rbf) {
 }
 
 
-void *analysis_worker (char* str_alsa_device) {
+void *analysis_worker (void*) {
     int err;
     int16_t *buffer;
     int buffer_frames = 1024;
@@ -287,9 +287,9 @@ void *analysis_worker (char* str_alsa_device) {
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
   
-    if ((err = snd_pcm_open (&capture_handle, str_alsa_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+    if ((err = snd_pcm_open (&capture_handle, "default", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
       fprintf (stderr, "cannot open audio device %s (%s)\n", 
-               str_alsa_device,
+               "default",
                snd_strerror (err));
       exit (1);
     }
@@ -427,9 +427,10 @@ int get_analysis_state(void) {
 
 int init_analysis(void) {
     pthread_t analysis_thread;
+
     analysis_shutdown = 0;
     count_beats = 0;
-    if (pthread_create(&analysis_thread, NULL, analysis_worker, "default")) {
+    if (pthread_create(&analysis_thread, NULL, analysis_worker, NULL)) {
       fprintf(stderr, "Error creating analysis thread\n");
       return 0;
     }
@@ -441,9 +442,10 @@ int stop_analysis(void) {
     if (sync_beats > 10) {
         sync_beats -= 10; // make sure beat sync is bellow 10, meaning 
     }
+}
 
 int beat_sync(uint8_t enabled) {
-    if (enabled > 10) && (analysis_shutdown) {
+    if ((enabled > 10) && (analysis_shutdown>0)) {
       return 0;
     }
     sync_beats = enabled;
