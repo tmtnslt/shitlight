@@ -397,7 +397,7 @@ void *analysis_worker (char* str_alsa_device) {
   	
     snd_pcm_close (capture_handle);
     fprintf(stdout, "audio interface closed\n");
-  
+    analysis_shutdown = 2;
   
     return NULL;
 
@@ -406,7 +406,11 @@ void *analysis_worker (char* str_alsa_device) {
 float get_fps(void) {
         // gives some calculation about the actual speed of the program.
         return fps;
-} 
+}
+
+int get_fps_limit(void) {
+    return (int) 10000000.0/LIMIT_MICROS;
+}
 
 float get_bpm(void) {
 	return bpm;
@@ -417,13 +421,34 @@ int set_bpm(float _bpm) {
 	return 1;
 }
 
-int get_analysis_state(void);
+int get_analysis_state(void) {
+    return analysis_shutdown;
+}
 
-int init_analysis(void);
+int init_analysis(void) {
+    pthread_t analysis_thread;
+    analysis_shutdown = 0;
+    count_beats = 0;
+    if (pthread_create(&analysis_thread, NULL, analysis_worker, "default")) {
+      fprintf(stderr, "Error creating analysis thread\n");
+      return 0;
+    }
+    return 1;
+}
 
-int stop_analysis(void);
+int stop_analysis(void) {
+    analysis_shutdown = 1;
+    if (sync_beats > 10) {
+        sync_beats -= 10; // make sure beat sync is bellow 10, meaning 
+    }
 
-int beat_sync(uint8_t enabled);
+int beat_sync(uint8_t enabled) {
+    if (enabled > 10) && (analysis_shutdown) {
+      return 0;
+    }
+    sync_beats = enabled;
+    return 1;
+}
 
 
 int init(void) {
@@ -442,7 +467,7 @@ int init(void) {
 
     writer_rbf = (ringbuffer*) init_buffer(); //init sets all frames to zero, including reps. make sure the worker loop doesn't get stuck on zero rep counter.
     is_shutdown = 0;
-    analysis_shutdown = 0;
+    analysis_shutdown = 1;
     bpm = 120;
     count_beats = 0;
     sync_beats = 0;
