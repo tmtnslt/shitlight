@@ -29,11 +29,18 @@ _chit.add_frame.restype = None
 _chit.get_fps.argtypes = None
 _chit.get_fps.restype = ctypes.c_float
 
+_chit.reset.argtypes = None
+_chit.reset.restype = ctypes.c_int
+
 def init_shitlight():
     return (_chit.init()==1)
 
 def get_fps():
     return _chit.get_fps()
+
+def clear_buffer():
+    print "Deleting Buffer..."
+    return _chit.reset()
 
 def add_frame(rep, frame):
     # test if frame is internal format or needs to be converted
