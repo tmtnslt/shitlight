@@ -5,6 +5,8 @@
 *
 */
 
+#include <iostream>
+#include <string>
 #include <pthread.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -581,7 +583,145 @@ void getnormvec( float* normvec, int len )
 }
 
 
-int main(void) {
+
+
+
+void usage(std::string progname) {
+	std::cout << "Usage:\n" << progname <<" --demo: Start Demo (Made by ???)\n";
+	std::cout << progname <<" --olddemo: Start Old Demo (Made by ???)\n";
+	std::cout << progname <<" --beattest: Test Beatdetection (Output to Console)\n";
+	std::cout << progname <<" --beatdemo: Test Beatdetection (Output to Shitlight)\n";
+}
+
+void beattest(void)
+{
+  int i;
+  int err;
+  int16_t *buffer;
+  double *dbuffer;
+  int buffer_frames = 1024;
+  unsigned int rate = 44100;
+  snd_pcm_t *capture_handle;
+  snd_pcm_hw_params_t *hw_params;
+  snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
+
+  if ((err = snd_pcm_open (&capture_handle, "default", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+    fprintf (stderr, "cannot open audio device %s (%s)\n", 
+             "default",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "audio interface opened\n");
+       
+  if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+    fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "hw_params allocated\n");
+         
+  if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
+    fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "hw_params initialized\n");
+  
+  if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
+    fprintf (stderr, "cannot set access type (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "hw_params access setted\n");
+  
+  if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, format)) < 0) {
+    fprintf (stderr, "cannot set sample format (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "hw_params format setted\n");
+  
+  if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
+    fprintf (stderr, "cannot set sample rate (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+  
+  fprintf(stdout, "hw_params rate setted\n");
+
+  if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 1)) < 0) {
+    fprintf (stderr, "cannot set channel count (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "hw_params channels setted\n");
+  
+  if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
+    fprintf (stderr, "cannot set parameters (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "hw_params setted\n");
+  
+  snd_pcm_hw_params_free (hw_params);
+
+  fprintf(stdout, "hw_params freed\n");
+  
+  if ((err = snd_pcm_prepare (capture_handle)) < 0) {
+    fprintf (stderr, "cannot prepare audio interface for use (%s)\n",
+             snd_strerror (err));
+    exit (1);
+  }
+
+  fprintf(stdout, "audio interface prepared\n");
+
+  buffer = (int16_t*) malloc(buffer_frames * snd_pcm_format_width(format) / 8);
+//  dbuffer = (double*)malloc(buffer_frames * 64 / 8);
+
+  fprintf(stdout, "buffer allocated\n");
+
+  BTrack b(buffer_frames/2);
+
+  fprintf(stdout, "initialized analyzer\n");
+
+  printf("Every Beat Is A Violent Noise:\n");
+  for (i = 0; i < 10000; ++i) {
+    if ((err = snd_pcm_readi (capture_handle, buffer, buffer_frames)) != buffer_frames) {
+      fprintf (stderr, "read from audio interface failed (%s)\n",
+               err, snd_strerror (err));
+      exit (1);
+    }
+//    fprintf(stdout, "read %d done\n", i);
+//    fprintf(stdout, "Converting to double\n");
+//    for (int j = 0; j<buffer_frames;j++) {
+//      dbuffer[j] = (double)buffer[j];
+//    }
+//   fprintf(stdout, "Done, pushing to analyzer\n");
+    b.processAudioFrameInt(buffer);
+    fprintf(stderr,"tempo: %.2f\r",b.getCurrentTempoEstimate());
+/*    if (b.beatDueInCurrentFrame()) {
+      fprintf(stderr,"*");
+    }*/
+  }
+
+  free(buffer);
+  free(dbuffer);
+
+  fprintf(stdout, "buffer freed\n");
+  
+  snd_pcm_close (capture_handle);
+  fprintf(stdout, "audio interface closed\n");
+
+}
+
+int demo(void) {
     init();
     t_chitframe f;
     memset(&f, 0, sizeof(t_chitframe));
@@ -631,7 +771,7 @@ int main(void) {
       }
     }
 }
-int old_main(void) {
+int old_demo(void) {
     // demo time
     init();
     t_chitframe red;
@@ -692,7 +832,27 @@ int old_main(void) {
 }
 
 
-
-
-
-
+int main(int argnum, char* argv[]) {
+  if (argnum == 1) {
+    usage(std::string(argv[0]));
+    return 1;
+  }
+  if (std::string(argv[1])=="--help") {
+    usage(std::string(argv[0]));
+    return 1;
+  }
+  if (std::string(argv[1])=="--demo") {
+    demo();
+    return 1;
+  }
+  if (std::string(argv[1])=="--olddemo") {
+    old_demo();
+    return 1;
+  }
+  if (std::string(argv[1])=="--beattest") {
+    beattest();
+    return 1;
+  }
+  std::cerr << "Error Parsing Command Line\n";
+  return 0;
+} 
