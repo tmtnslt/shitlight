@@ -26,6 +26,8 @@
 #define HELLIGKEITSSTUFEN 256 
 #define FRAMES_IN_BUFFER 1024
 
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
 int mask = 0b00011111; // only activate ports that are safe for you!
 
 // activate framelimiter
@@ -233,7 +235,7 @@ void *worker (void* p_rbf) {
         #endif
         #if defined(FRAMELIMIT_OPTIONAL) || defined(FRAMELIMIT_ACTIVE)
             left = (LIMIT_MICROS*c_rep)-(micros()-begin);
-            while (left > 1000) {
+            while (left > 10000) {
                 // we were fast than required, enough time to draw more frames
                 #ifdef _DEBUG
                     printf("Frame limiter, draw additional frames. Time to fill: %i\n", left);
@@ -531,8 +533,8 @@ void add_frame(uint16_t rep, uint8_t on_beat, t_chitframe* frame) {
     // to be drawn (rep) times. This call will block if the ring buffer is full
 
     int next;
-    next = (writer_rbf->pos_write);
-    if (next > (writer_rbf->capacity-1)) next=0;
+    next = (writer_rbf->pos_write)+1;
+    if (next > (writer_rbf->capacity)) next=0;
     while (next == writer_rbf->pos_read) {
         // Wait for reader to advance
         sleep(1);
@@ -542,7 +544,7 @@ void add_frame(uint16_t rep, uint8_t on_beat, t_chitframe* frame) {
     #endif
     writer_rbf->buffer[next] = chit2buf(rep, on_beat, frame);
     // move write head ahead, free access for reader
-    writer_rbf->pos_write = next+1;
+    writer_rbf->pos_write = next;
 }
 
 
