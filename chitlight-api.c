@@ -291,7 +291,8 @@ void *analysis_worker (void*) {
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
   
-    if ((err = snd_pcm_open (&capture_handle, "default", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+    BTrack b(1024/2);
+    if ((err = snd_pcm_open (&capture_handle, "hw:1,0", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
       fprintf (stderr, "cannot open audio device %s (%s)\n", 
                "default",
                snd_strerror (err));
@@ -375,7 +376,6 @@ void *analysis_worker (void*) {
   
     fprintf(stdout, "buffer allocated\n");
   
-    BTrack b(buffer_frames/2);
   
     fprintf(stdout, "initialized analyzer\n");
   
@@ -385,12 +385,14 @@ void *analysis_worker (void*) {
                  err, snd_strerror (err));
         exit (1);
       }
-      if (sync_beats > 10) {
+      if (sync_beats > 0) {
   	    b.processAudioFrameInt(buffer);
   	    bpm = (float) b.getCurrentTempoEstimate();
   	    if (b.beatDueInCurrentFrame()) count_beats++;
-  #ifdef _DEBUG
-  	    fprintf(stderr,"tempo: %.2f\n",b.getCurrentTempoEstimate());
+  #ifdef _DEBUGBPM
+  	    fprintf(stderr,"tempo: %.2f",b.getCurrentTempoEstimate());
+	    if (b.beatDueInCurrentFrame()) {fprintf(stderr, "+++\n" ); }
+	    else { fprintf(stderr, "\n" );}
   #endif
       }
     }
@@ -625,7 +627,7 @@ void beattest(void)
   snd_pcm_hw_params_t *hw_params;
   snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
 
-  if ((err = snd_pcm_open (&capture_handle, "default", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+  if ((err = snd_pcm_open (&capture_handle, "hw:1,0", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
     fprintf (stderr, "cannot open audio device %s (%s)\n", 
              "default",
              snd_strerror (err));
@@ -707,7 +709,7 @@ void beattest(void)
 
   fprintf(stdout, "buffer allocated\n");
 
-  BTrack b(buffer_frames/2);
+  BTrack b(1024/2);
 
   fprintf(stdout, "initialized analyzer\n");
 
@@ -725,14 +727,13 @@ void beattest(void)
 //    }
 //   fprintf(stdout, "Done, pushing to analyzer\n");
     b.processAudioFrameInt(buffer);
-    fprintf(stderr,"tempo: %.2f\r",b.getCurrentTempoEstimate());
-/*    if (b.beatDueInCurrentFrame()) {
+//    fprintf(stderr,"tempo: %.2f\r",b.getCurrentTempoEstimate());
+    if (b.beatDueInCurrentFrame()) {
       fprintf(stderr,"*");
-    }*/
+    }
   }
 
   free(buffer);
-  free(dbuffer);
 
   fprintf(stdout, "buffer freed\n");
   
@@ -741,40 +742,65 @@ void beattest(void)
 
 }
 
+int beatdemo(void) {
+    init();
+    init_analysis();
+    beat_sync(11);
+    int i,j,k;
+    t_chitframe f;
+    memset(&f, 0, sizeof(t_chitframe));
+
+    while(1) {
+                memset(&f, 0, sizeof(t_chitframe));
+    	for (i=0;i<8;i++) {
+	    for (k=0;k<3;k++) {
+	        for (j=0;j<5;j++) {
+	            f.brightness[j][i][k] = 255;
+		}
+	    }
+        }
+		add_frame(1, 1,&f);
+                memset(&f, 0, sizeof(t_chitframe));
+		add_frame(1, 1,&f);
+		//fprintf(stderr, "\rBPM: %f", get_bpm());
+    }
+
+}
 int demo(void) {
     init();
     t_chitframe f;
     memset(&f, 0, sizeof(t_chitframe));
-    int i,j,k,l,flip;
+    int i,j,k,l,flip,plat;
     k=50;
     flip=1;
     l=0;
+    plat=0;
     while (1) {
        for (j=(-16);j<16;j++) {
           i = abs(j)-4;
           memset(&f, 0, sizeof(t_chitframe));
           if((i-5)>=0)
-              f.brightness[0][i-5][l] = 255/32;
+              f.brightness[plat][i-5][l] = 255/32;
           if((i-4)>=0)
-              f.brightness[0][i-4][l] = 255/16;
+              f.brightness[plat][i-4][l] = 255/16;
           if((i-3)>=0)
-              f.brightness[0][i-3][l] = 255/8;
+              f.brightness[plat][i-3][l] = 255/8;
           if((i-2)>=0) 
-              f.brightness[0][i-2][l] = 255/4;
+              f.brightness[plat][i-2][l] = 255/4;
           if((i-1)>=0) 
-              f.brightness[0][i-1][l] = 255/2;
+              f.brightness[plat][i-1][l] = 255/2;
           if((i>=0) && (i<8)) 
-              f.brightness[0][i][l] = 255;
+              f.brightness[plat][i][l] = 255;
           if((i+1)<8) 
-              f.brightness[0][i+1][l]= 255/2;
+              f.brightness[plat][i+1][l]= 255/2;
           if((i+2)<8) 
-              f.brightness[0][i+2][l] = 255/4;
+              f.brightness[plat][i+2][l] = 255/4;
           if((i+3)<8)
-              f.brightness[0][i+3][l] = 255/8; 
+              f.brightness[plat][i+3][l] = 255/8; 
           if((i+4)<8)
-              f.brightness[0][i+4][l] = 255/16; 
+              f.brightness[plat][i+4][l] = 255/16; 
           if((i+5)<8)
-              f.brightness[0][i+5][l] = 255/32; 
+              f.brightness[plat][i+5][l] = 255/32; 
           add_frame((uint16_t)k/5, 0, &f);
        }
        if((k>25) && (flip==1)) {
@@ -871,6 +897,10 @@ int main(int argnum, char* argv[]) {
   }
   if (std::string(argv[1])=="--beattest") {
     beattest();
+    return 1;
+  }
+  if (std::string(argv[1])=="--beatdemo") {
+    beatdemo();
     return 1;
   }
   std::cerr << "Error Parsing Command Line\n";
