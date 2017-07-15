@@ -25,12 +25,15 @@ def random_color():
 
 def one_flash(current_color):
     random_row = np.random.randint(N_ROWS)
+    random_row=3
     random_led = np.random.randint(N_LED)
     brightness = np.zeros((5, 8, 3))
     brightness[random_row, random_led, :] = current_color
-
     offset = 0
     decreasing = False
+
+    shytlight.add_frame(rep=1, frame=brightness, on_beat=True)
+
     while not decreasing:
         decreasing = True
         rep = 1

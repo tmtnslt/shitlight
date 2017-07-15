@@ -37,11 +37,12 @@ int reset(void); // try to reset the ring buffer and thread if something failed.
 
 int set_bpm(float bpm); // set the internal bpm counter
 
-float get_bpm(void); // return value of internal bpm counter
-
+double get_bpm(void); // return value of internal bpm counter
+int get_volume(void); // return the volume of the last sample
+double get_cumscore(void); // return the value of the cumulative score from beat analysis
 int get_analysis_state(void); // give info about the state of the beat analysis
 
-int init_analysis(void); // start the beat analysis thread
+int init_analysis(int verbose); // start the beat analysis thread
 
 int stop_analysis(void); // stop the beat analysis thread
 

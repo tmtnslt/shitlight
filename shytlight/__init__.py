@@ -36,7 +36,13 @@ _chit.set_bpm.argtypes = [ctypes.c_float]
 _chit.set_bpm.restypes = ctypes.c_int
 
 _chit.get_bpm.argtypes = None
-_chit.get_bpm.restypes = ctypes.c_float
+_chit.get_bpm.restypes = ctypes.c_double
+
+_chit.get_volume.argtypes = None
+_chit.get_volume.restypes = ctypes.c_int
+
+_chit.get_cumscore.argtypes = None
+_chit.get_cumscore.restypes = ctypes.c_double
 
 _chit.get_analysis_state.argtypes = None
 _chit.get_analysis_state.restypes = ctypes.c_int
@@ -61,6 +67,12 @@ def get_fps():
 
 def get_bpm():
     return _chit.get_bpm()
+
+def get_volume():
+    return _chit.get_volume()
+
+def get_cumul():
+    return _chit.get_cumscore()
 
 def set_bpm(bpm):
     return _chit.set_bpm(bpm) == 1

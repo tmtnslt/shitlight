@@ -494,7 +494,7 @@ void BTrack::calculateTempo()
 		prevDelta[j] = delta[j];
 	}
 	
-	beatPeriod = round ((60.0*44100.0)/(((2*maxind)+80)*((double) hopSize)));
+	beatPeriod =  ((60.0*44100.0)/(((2*maxind)+80)*((double) hopSize)));
 	
 	if (beatPeriod > 0)
 	{
