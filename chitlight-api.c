@@ -31,7 +31,7 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 int mask = 0b00011111; // only activate ports that are safe for you!
 
 // activate framelimiter
-#define NOFRAMELIMIT_ACTIVE
+#define FRAMELIMIT_ACTIVE
 // set framelimit to 100fps
 // i.e. time to draw a frame is 10000 mu s
 #define LIMIT_MICROS 10000
@@ -115,8 +115,12 @@ int16_t bufferunderruns;
 // global float for fps
 float fps;
 
-// global float for bpm
-float bpm;
+// global double for bpm and cumul
+double bpm;
+double cumul;
+
+// global volume
+int vol;
 
 //global long counted beats
 uint32_t count_beats;
@@ -192,10 +196,17 @@ void *worker (void* p_rbf) {
 
 	if (sync_beats > 0 ) {
 		// resize c_rep according to bpm count
-		c_rep = (int) bpm/BPM_NORMAL;
+		c_rep *=  bpm/BPM_NORMAL;
 		if (sync_beats > 10) {
 			if (c_on_beat == 1) internal_beats++;
 			if (internal_beats > count_beats) internal_beats = count_beats; // counter reset externally
+			if ((internal_beats+2) < count_beats) { //we're running behind
+#ifdef _DEBUGBPM
+				printf("\nrunning behind, speed up! Current reps would be %d\n\n", c_rep);
+#endif
+				c_rep /=1.3; //half rep to catch up
+				if (c_rep <= 1) continue; // if to low just skip.
+			}
 		}
 	}
         #ifdef _DEBUG
@@ -230,9 +241,6 @@ void *worker (void* p_rbf) {
         #ifdef FRAMELIMIT_OPTIONAL
         if (limitframes) {
         #endif
-        #ifdef FRAMELIMIT_ACTIVE
-        if (1) {
-        #endif
         #if defined(FRAMELIMIT_OPTIONAL) || defined(FRAMELIMIT_ACTIVE)
             left = (LIMIT_MICROS*c_rep)-(micros()-begin);
             while (left > 10000) {
@@ -244,35 +252,38 @@ void *worker (void* p_rbf) {
                 left = (LIMIT_MICROS*c_rep)-(micros()-begin);
             }
             // still time left, but too much to for a new frame, just burn some time
-            if (left > 0) delayMicroseconds(left);
+            //if (left > 0) delayMicroseconds(left);
+	#endif
+	#ifdef FRAMELIMIT_OPTIONAL
         }
         #endif
 	// process beatsync
 	if (sync_beats > 10) {
-	#ifdef _DEBUG
+	#if defined(_DEBUG) || defined(_DEBUGBPM)
 	printf("Checkin Beat Analysis\n");
+	printf("int. %d\text. %d\n", internal_beats, count_beats);
         #endif
 		if (writer_rbf->buffer[next_read].on_beat == 1) {
-#ifdef _DEBUG
+#ifdef _DEBUGBPM
 			printf("next frame should sync on beat, check beat counter\n");
 #endif
 			// check beat counter
 			while (internal_beats == count_beats) { // waiting for next beat, repeat frame
-#ifdef _DEBUG
-				printf("waiting for next beat, repeat\n");
+#ifdef _DEBUGBPM
+				printf("waiting for next beat, int. %d\text. %d\n", internal_beats, count_beats);
 #endif
 				write_frame(&c_frame);
 			}
 		}
 		else {
-			if (internal_beats < count_beats) { //we're running behind
-#ifdef _DEBUG
+			if ((internal_beats+4) < count_beats) { //we're running behind a whole bar...
+#ifdef _DEBUGBPM
 				printf("running behind, checking for next keyframe\n");
 #endif
                         	look_ahead = next_read;
 				do {
 					look_ahead++;
-#ifdef _DEBUG
+#ifdef _DEBUGBPM
 					printf("checking\n");
 #endif
         				if (look_ahead >= (writer_rbf->capacity)) look_ahead = 0; //if we've fixed the buffer length, we can bitfiddle here.
@@ -284,7 +295,7 @@ void *worker (void* p_rbf) {
 				next_read = look_ahead;
 			}
 		}
-#ifdef _DEBUG
+#ifdef _DEBUGBPM
 		printf("End Beat Analysis\n");
 #endif
 	}
@@ -299,17 +310,28 @@ void *worker (void* p_rbf) {
     return NULL;
 }
 
+int compute_max_peak (int16_t* buffer, size_t count) {
+    int16_t max_peak = 0;
+    int16_t val = 0;
+    int c = 0;
+    for (c = 0; c < count; c++) {
+        val = abs(buffer[c]);
+	if (val > max_peak) max_peak = val;
+    }
+    return (max_peak * 100 / 32767);
 
-void *analysis_worker (void*) {
+}
+
+void *analysis_worker (void* _verbose) {
     int err;
     int16_t *buffer;
-    int buffer_frames = 2048;
+    int buffer_frames = 1024*4;
     unsigned int rate = 44100;
     snd_pcm_t *capture_handle;
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-  
-    BTrack b(2048/2);
+    int verbose = (int) _verbose; 
+    BTrack b(1024*4/2);
     if ((err = snd_pcm_open (&capture_handle, "hw:1,0", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
       fprintf (stderr, "cannot open audio device %s (%s)\n", 
                "default",
@@ -317,7 +339,7 @@ void *analysis_worker (void*) {
       exit (1);
     }
   
-    fprintf(stdout, "audio interface opened\n");
+    if (verbose) fprintf(stdout, "audio interface opened\n");
   		   
     if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
       fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
@@ -325,7 +347,7 @@ void *analysis_worker (void*) {
       exit (1);
     }
   
-    fprintf(stdout, "hw_params allocated\n");
+    if (verbose) fprintf(stdout, "hw_params allocated\n");
   				 
     if ((err = snd_pcm_hw_params_any (capture_handle, hw_params)) < 0) {
       fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
@@ -333,7 +355,7 @@ void *analysis_worker (void*) {
       exit (1);
     }
   
-    fprintf(stdout, "hw_params initialized\n");
+    if (verbose) fprintf(stdout, "hw_params initialized\n");
   	
     if ((err = snd_pcm_hw_params_set_access (capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
       fprintf (stderr, "cannot set access type (%s)\n",
@@ -342,7 +364,7 @@ void *analysis_worker (void*) {
     }
       
   
-    fprintf(stdout, "hw_params access setted\n");
+    if (verbose) fprintf(stdout, "hw_params access setted\n");
   	
     if ((err = snd_pcm_hw_params_set_format (capture_handle, hw_params, format)) < 0) {
       fprintf (stderr, "cannot set sample format (%s)\n",
@@ -350,7 +372,7 @@ void *analysis_worker (void*) {
       exit (1);
     }
   
-    fprintf(stdout, "hw_params format setted\n");
+    if (verbose) fprintf(stdout, "hw_params format setted\n");
   	
     if ((err = snd_pcm_hw_params_set_rate_near (capture_handle, hw_params, &rate, 0)) < 0) {
       fprintf (stderr, "cannot set sample rate (%s)\n",
@@ -358,7 +380,7 @@ void *analysis_worker (void*) {
       exit (1);
     }
   	
-    fprintf(stdout, "hw_params rate setted\n");
+    if (verbose) fprintf(stdout, "hw_params rate setted\n");
   
     if ((err = snd_pcm_hw_params_set_channels (capture_handle, hw_params, 1)) < 0) {
       fprintf (stderr, "cannot set channel count (%s)\n",
@@ -366,7 +388,7 @@ void *analysis_worker (void*) {
       exit (1);
     }
   
-    fprintf(stdout, "hw_params channels setted\n");
+    if (verbose) fprintf(stdout, "hw_params channels setted\n");
   	
     if ((err = snd_pcm_hw_params (capture_handle, hw_params)) < 0) {
       fprintf (stderr, "cannot set parameters (%s)\n",
@@ -375,11 +397,11 @@ void *analysis_worker (void*) {
     }
   
   
-    fprintf(stdout, "hw_params setted\n");
+    if (verbose) fprintf(stdout, "hw_params setted\n");
   	
     snd_pcm_hw_params_free (hw_params);
   
-    fprintf(stdout, "hw_params freed\n");
+    if (verbose) fprintf(stdout, "hw_params freed\n");
   	
     if ((err = snd_pcm_prepare (capture_handle)) < 0) {
       fprintf (stderr, "cannot prepare audio interface for use (%s)\n",
@@ -387,15 +409,15 @@ void *analysis_worker (void*) {
       exit (1);
     }
   
-    fprintf(stdout, "audio interface prepared\n");
+    if (verbose) fprintf(stdout, "audio interface prepared\n");
   
     buffer = (int16_t*) malloc(buffer_frames * snd_pcm_format_width(format) / 8);
   //  dbuffer = (double*)malloc(buffer_frames * 64 / 8);
   
-    fprintf(stdout, "buffer allocated\n");
+    if (verbose) fprintf(stdout, "buffer allocated\n");
   
   
-    fprintf(stdout, "initialized analyzer\n");
+    if (verbose) fprintf(stdout, "initialized analyzer\n");
   
     while (!analysis_shutdown) {
       if ((err = snd_pcm_readi (capture_handle, buffer, buffer_frames)) != buffer_frames) {
@@ -405,22 +427,24 @@ void *analysis_worker (void*) {
       }
       if (sync_beats > 0) {
   	    b.processAudioFrameInt(buffer);
-  	    bpm = (float) b.getCurrentTempoEstimate();
+  	    bpm = b.getCurrentTempoEstimate();
+	    cumul = b.getLatestCumulativeScoreValue();
+	    vol = compute_max_peak(buffer, buffer_frames);
   	    if (b.beatDueInCurrentFrame()) count_beats++;
-  #ifdef _DEBUGBPM
-  	    fprintf(stderr,"\rtempo: %.2f\t",bpm);
-	    if (b.beatDueInCurrentFrame()) {fprintf(stderr, "+++" ); }
-	    else { fprintf(stderr, "   " );}
-  #endif
+  	    if (verbose) {
+		    fprintf(stderr,"\rvol: %d\%\ttempo: %.2f\tcum. score: %.2f\t",vol, bpm, cumul);
+	            if (b.beatDueInCurrentFrame()) {fprintf(stderr, "+++" ); }
+	            else { fprintf(stderr, "   " );}
+	    }
       }
     }
   
     free(buffer);
   
-    fprintf(stdout, "buffer freed\n");
+    if (verbose) fprintf(stdout, "buffer freed\n");
   	
     snd_pcm_close (capture_handle);
-    fprintf(stdout, "audio interface closed\n");
+    if (verbose) fprintf(stdout, "audio interface closed\n");
     analysis_shutdown = 2;
   
     return NULL;
@@ -436,8 +460,16 @@ int get_fps_limit(void) {
     return (int) 10000000.0/LIMIT_MICROS;
 }
 
-float get_bpm(void) {
+double get_bpm(void) {
 	return bpm;
+}
+
+int get_volume(void) {
+        return vol;
+}
+
+double get_cumscore(void) {
+        return cumul;
 }
 
 int set_bpm(float _bpm) {
@@ -449,12 +481,12 @@ int get_analysis_state(void) {
     return analysis_shutdown;
 }
 
-int init_analysis(void) {
+int init_analysis(int verbose) {
     pthread_t analysis_thread;
 
     analysis_shutdown = 0;
     count_beats = 0;
-    if (pthread_create(&analysis_thread, NULL, analysis_worker, NULL)) {
+    if (pthread_create(&analysis_thread, NULL, analysis_worker, &verbose)) {
       fprintf(stderr, "Error creating analysis thread\n");
       return 0;
     }
@@ -762,11 +794,13 @@ void beattest(void)
 
 int beatdemo(void) {
     init();
-    init_analysis();
+    init_analysis(0);
     beat_sync(11);
     int i,j,k;
     t_chitframe f;
+    t_chitframe g;
     memset(&f, 0, sizeof(t_chitframe));
+    memset(&g, 0, sizeof(t_chitframe));
 
     while(1) {
                 memset(&f, 0, sizeof(t_chitframe));
@@ -777,9 +811,10 @@ int beatdemo(void) {
 		}
 	    }
         }
-		add_frame(1, 1,&f);
-                memset(&f, 0, sizeof(t_chitframe));
-		add_frame(1, 1,&f);
+		add_frame(50, 1,&f);
+		add_frame(50, 0,&g);
+		//add_frame(30, 0,&f);
+		//add_frame(30, 0,&g);
 		//fprintf(stderr, "\rBPM: %f", get_bpm());
     }
 
