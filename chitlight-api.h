@@ -9,7 +9,7 @@
 #define PLATINEN 5
 #define LEDS_PRO_PLATINE 8
 #define FARBEN_PRO_LED 3
-
+extern "C" {
 typedef struct {
      uint8_t brightness[PLATINEN][LEDS_PRO_PLATINE][FARBEN_PRO_LED];
 } t_chitframe;
@@ -46,3 +46,4 @@ int init_analysis(void); // start the beat analysis thread
 int stop_analysis(void); // stop the beat analysis thread
 
 int beat_sync(uint8_t enabled); // controlls if the frame loop tries to syncronize to bpm and beat signaling.
+}

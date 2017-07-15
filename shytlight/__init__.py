@@ -32,7 +32,7 @@ _chit.get_fps.restype = ctypes.c_float
 _chit.get_fps_limit.argtypes = None
 _chit.get_fps_limit.restype = ctypes.c_int
 
-_chit.set_bpm.argtypes = ctypes.c_float
+_chit.set_bpm.argtypes = [ctypes.c_float]
 _chit.set_bpm.restypes = ctypes.c_int
 
 _chit.get_bpm.argtypes = None
@@ -47,7 +47,7 @@ _chit.init_analysis.restypes = ctypes.c_int
 _chit.stop_analysis.argtypes = None
 _chit.stop_analysis.restypes = ctypes.c_int
 
-_chit.beat_sync.argtypes = ctypes.c_uint8
+_chit.beat_sync.argtypes = [ctypes.c_uint8]
 _chit.beat_sync.restypes = ctypes.c_int
 
 _chit.reset.argtypes = None
@@ -79,7 +79,7 @@ def beat_sync(enabled):
 
 def beats(count):
     # converts (fraction of) beats to needed repetitions of frames
-    return int(count*_chit.get_fps_limit*60/120)
+    return int(count*_chit.get_fps_limit()*60/120)
 
 def clear_buffer():
     print "Deleting Buffer..."

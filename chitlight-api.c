@@ -249,17 +249,32 @@ void *worker (void* p_rbf) {
         #endif
 	// process beatsync
 	if (sync_beats > 10) {
+	#ifdef _DEBUG
+	printf("Checkin Beat Analysis\n");
+        #endif
 		if (writer_rbf->buffer[next_read].on_beat == 1) {
-			// next frame should sync on beat
+#ifdef _DEBUG
+			printf("next frame should sync on beat, check beat counter\n");
+#endif
 			// check beat counter
 			while (internal_beats == count_beats) { // waiting for next beat, repeat frame
+#ifdef _DEBUG
+				printf("waiting for next beat, repeat\n");
+#endif
 				write_frame(&c_frame);
 			}
 		}
 		else {
 			if (internal_beats < count_beats) { //we're running behind
-				look_ahead = next_read +1;
+#ifdef _DEBUG
+				printf("running behind, checking for next keyframe\n");
+#endif
+                        	look_ahead = next_read;
 				do {
+					look_ahead++;
+#ifdef _DEBUG
+					printf("checking\n");
+#endif
         				if (look_ahead >= (writer_rbf->capacity)) look_ahead = 0; //if we've fixed the buffer length, we can bitfiddle here.
 					if (look_ahead== (writer_rbf->pos_write)) { // we searched all available frames, no beat frame available, continue normal
 						look_ahead = next_read;
@@ -269,6 +284,9 @@ void *worker (void* p_rbf) {
 				next_read = look_ahead;
 			}
 		}
+#ifdef _DEBUG
+		printf("End Beat Analysis\n");
+#endif
 	}
 
 
@@ -285,13 +303,13 @@ void *worker (void* p_rbf) {
 void *analysis_worker (void*) {
     int err;
     int16_t *buffer;
-    int buffer_frames = 1024;
+    int buffer_frames = 2048;
     unsigned int rate = 44100;
     snd_pcm_t *capture_handle;
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
   
-    BTrack b(1024/2);
+    BTrack b(2048/2);
     if ((err = snd_pcm_open (&capture_handle, "hw:1,0", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
       fprintf (stderr, "cannot open audio device %s (%s)\n", 
                "default",
@@ -390,9 +408,9 @@ void *analysis_worker (void*) {
   	    bpm = (float) b.getCurrentTempoEstimate();
   	    if (b.beatDueInCurrentFrame()) count_beats++;
   #ifdef _DEBUGBPM
-  	    fprintf(stderr,"tempo: %.2f",b.getCurrentTempoEstimate());
-	    if (b.beatDueInCurrentFrame()) {fprintf(stderr, "+++\n" ); }
-	    else { fprintf(stderr, "\n" );}
+  	    fprintf(stderr,"\rtempo: %.2f\t",bpm);
+	    if (b.beatDueInCurrentFrame()) {fprintf(stderr, "+++" ); }
+	    else { fprintf(stderr, "   " );}
   #endif
       }
     }
