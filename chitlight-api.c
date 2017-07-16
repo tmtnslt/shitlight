@@ -534,7 +534,7 @@ void add_frame(uint16_t rep, uint8_t on_beat, t_chitframe* frame) {
 
     int next;
     next = (writer_rbf->pos_write)+1;
-    if (next > (writer_rbf->capacity)) next=0;
+    if (next >= (writer_rbf->capacity)) next=0;
     while (next == writer_rbf->pos_read) {
         // Wait for reader to advance
         sleep(1);
@@ -552,7 +552,25 @@ int try_add_frame(uint8_t rep, t_chitframe* frame); // same as add_frame, but do
 
 int shutdown(void); // end the thread and clear the GPIOs
 
-int reset(void); // try to reset the ring buffer and thread if something failed.
+int reset(void) {
+    // get the current reader position
+    // add 10 to it to be somewhat thread safe
+    // and then set the writer position to that
+    int pr,pw;
+    pw = (writer_rbf->pos_write);
+    pr = (writer_rbf->pos_read);
+    if (  ( ((pr+10) >= pw) && !(pw<pr) ) ||
+          ( ( (pr+10) >= (pw+(writer_rbf->capacity)) ) && !( pw < (pr+(writer_rbf->capacity)) ) ))  {
+        return -1;
+    }
+    if ((pr+10) >= (writer_rbf->capacity)) {
+        pr = pr + 10 - writer_rbf->capacity;
+    } else {
+        pr+=10;
+    }
+    writer_rbf->pos_write = (pr);
+    return 1;
+}
 
 float getnorm( float* normvec, int len )
 {

@@ -50,6 +50,8 @@ _chit.stop_analysis.restypes = ctypes.c_int
 _chit.beat_sync.argtypes = ctypes.c_uint8
 _chit.beat_sync.restypes = ctypes.c_int
 
+_chit.reset.argtypes = None
+_chit.reset.restype = ctypes.c_int
 
 def init_shitlight():
     return (_chit.init()==1)
@@ -78,6 +80,10 @@ def beat_sync(enabled):
 def beats(count):
     # converts (fraction of) beats to needed repetitions of frames
     return int(count*_chit.get_fps_limit*60/120)
+
+def clear_buffer():
+    print "Deleting Buffer..."
+    return _chit.reset()
 
 def add_frame(rep, frame,on_beat=False):
     # test if frame is internal format or needs to be converted
