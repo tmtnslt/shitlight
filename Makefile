@@ -1,7 +1,7 @@
 all : libshitlight
 
 libshitlight : chitlight-api.o minwiringPi/minwiringPi.o BTrack/BTrack.o
-	g++ --std=c++11 -shared -Wl,-soname,libshitlight.so -o libshitlight.so chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lpthread -lasound -lsamplerate -DUSE_FFTW -lfftw3
+	g++ --std=c++11 -shared -Wl,-soname,libshitlight.so -o libshitlight.so chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lasound -lsamplerate -DUSE_FFTW -lfftw3 -fpermissive -fPIC -pthread
 
 chitlight-api.o : chitlight-api.c
 	g++ --std=c++11 -c -fPIC chitlight-api.c -o chitlight-api.o -I minwiringPi/ -I BTrack/
@@ -14,11 +14,12 @@ BTrack/BTrack.o : BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp
 	g++ --std=c++11 -c -fPIC BTrack/BTrack.cpp -o BTrack/BTrack.o -DUSE_FFTW
 
 demo : chitlight-api.o minwiringPi/minwiringPi.o BTrack/BTrack.o
-	g++ --std=c++11 -o chitlightdemo chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lpthread -lasound -lsamplerate -DUSE_FFTW -lfftw3
+	g++ --std=c++11 -o chitlightdemo chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lasound -lsamplerate -DUSE_FFTW -lfftw3 -fpermissive -pthread
 
 debugdemo : chitlight-api.o minwiringPi/minwiringPi.o BTrack/BTrack.o
-	g++ --std=c++11 -o chitlightdemo chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lpthread -lasound -lsamplerate -DUSE_FFTW -lfftw3 -D_DEBUGBPM
+	g++ --std=c++11 -o chitlightdemo chitlight-api.c minwiringPi/minwiringPi.o BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lasound -lsamplerate -DUSE_FFTW -lfftw3 -D_DEBUGBPM -pthread
+
 debug : minwiringPi/minwiringPi.o BTrack/BTrack.o
-	g++ --std=c++11 -shared -Wl,-soname,libshitlight.so -o libshitlight.so chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lpthread -lasound -lsamplerate -DUSE_FFTW -lfftw3 -D_DEBUG
+	g++ --std=c++11 -shared -Wl,-soname,libshitlight.so -o libshitlight.so chitlight-api.c minwiringPi/minwiringPi.o BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lasound -lsamplerate -DUSE_FFTW -lfftw3 -D_DEBUG -pthread
 debugbpm : minwiringPi/minwiringPi.o BTrack/BTrack.o
-	g++ --std=c++11 -shared -Wl,-soname,libshitlight.so -o libshitlight.so chitlight-api.c minwiringPi/minwiringPi.c BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lpthread -lasound -lsamplerate -DUSE_FFTW -lfftw3 -D_DEBUGBPM
+	g++ --std=c++11 -shared -Wl,-soname,libshitlight.so -o libshitlight.so chitlight-api.c minwiringPi/minwiringPi.o BTrack/BTrack.cpp BTrack/OnsetDetectionFunction.cpp -I minwiringPi/ -I BTrack/ -lm -lasound -lsamplerate -DUSE_FFTW -lfftw3 -D_DEBUGBPM -pthread

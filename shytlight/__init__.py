@@ -78,7 +78,7 @@ def set_bpm(bpm):
     return _chit.set_bpm(bpm) == 1
 
 def get_analysis_state():
-    return _chit.get_analysis_state() >= 1
+    return _chit.get_analysis_state()
 
 def init_analysis():
     return _chit.init_analysis() == 1

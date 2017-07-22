@@ -7,7 +7,11 @@
 
 #include <iostream>
 #include <string>
+#ifdef __cplusplus
+#include <thread>
+#else
 #include <pthread.h>
+#endif
 #include <unistd.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -108,7 +112,7 @@ ringbuffer* init_buffer() {
 // global bool to stop worker thread
 uint8_t is_shutdown;
 uint8_t analysis_shutdown;
-
+int verbose;
 // global counter for buffer underruns in worker thread
 int16_t bufferunderruns;
 
@@ -150,7 +154,11 @@ void write_frame(t_memory_frame* frame) {
     }
 }
 
+#ifdef __cplusplus
+void worker (ringbuffer* p_rbf) {
+#else
 void *worker (void* p_rbf) {
+#endif
     t_memory_frame c_frame;
     uint16_t c_rep=1;
     uint8_t c_on_beat = 0;
@@ -307,7 +315,7 @@ void *worker (void* p_rbf) {
           printf("Done drawing frame\n");
         #endif
     }
-    return NULL;
+    //return NULL;
 }
 
 int compute_max_peak (int16_t* buffer, size_t count) {
@@ -322,7 +330,11 @@ int compute_max_peak (int16_t* buffer, size_t count) {
 
 }
 
-void *analysis_worker (void* _verbose) {
+#ifdef __cplusplus
+void analysis_worker (std::string device) {
+#else
+void *analysis_worker (void* _device) {
+#endif
     int err;
     int16_t *buffer;
     int buffer_frames = 1024*4;
@@ -330,11 +342,15 @@ void *analysis_worker (void* _verbose) {
     snd_pcm_t *capture_handle;
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-    int verbose = (int) _verbose; 
+    std::cout << "In Thread still Device " << device << std::endl;
     BTrack b(1024*4/2);
-    if ((err = snd_pcm_open (&capture_handle, "hw:1,0", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+#ifdef __cplusplus    
+    if ((err = snd_pcm_open (&capture_handle, device.c_str(), SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+#else
+    if ((err = snd_pcm_open (&capture_handle, device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {      
+#endif      
       fprintf (stderr, "cannot open audio device %s (%s)\n", 
-               "default",
+               device,
                snd_strerror (err));
       exit (1);
     }
@@ -447,7 +463,7 @@ void *analysis_worker (void* _verbose) {
     if (verbose) fprintf(stdout, "audio interface closed\n");
     analysis_shutdown = 2;
   
-    return NULL;
+    //return NULL;
 
 }
 
@@ -468,6 +484,12 @@ int get_volume(void) {
         return vol;
 }
 
+unsigned long get_beat_count(void) {
+  // Returns the count of the analysis beat counter. 
+  // Needed for simulating beatsync behaviour in shytlight_simulator
+  return count_beats;
+}
+
 double get_cumscore(void) {
         return cumul;
 }
@@ -478,18 +500,26 @@ int set_bpm(float _bpm) {
 }
 
 int get_analysis_state(void) {
-    return analysis_shutdown;
+    if (analysis_shutdown>0) return -1;
+    return sync_beats;
 }
 
-int init_analysis(int verbose) {
-    pthread_t analysis_thread;
-
+int init_analysis(int _verbose, const char* alsa_device) {
+    verbose = _verbose;
     analysis_shutdown = 0;
     count_beats = 0;
-    if (pthread_create(&analysis_thread, NULL, analysis_worker, &verbose)) {
+#ifdef __cplusplus
+    std::string device(alsa_device);
+    std::cout << "Trying Alsa Device" << device << std::endl;    
+    std::thread analysis_thread(analysis_worker, device);
+    analysis_thread.detach();
+#else      
+    pthread_t analysis_thread;
+    if (pthread_create(&analysis_thread, NULL, analysis_worker, &alsa_device)) {
       fprintf(stderr, "Error creating analysis thread\n");
       return 0;
-    }
+    }    
+#endif    
     return 1;
 }
 
@@ -510,7 +540,6 @@ int beat_sync(uint8_t enabled) {
 
 
 int init(void) {
-    pthread_t worker_thread;
     // does the initialization: creates ring buffer, initializes the gpio pins
     // and starts the thread
     wiringPiSetup();
@@ -537,6 +566,11 @@ int init(void) {
       printf("Next Step: Start Thread\n");
     #endif
 
+#ifdef __cplusplus
+    std::thread worker_thread(worker, std::cref(writer_rbf));
+    worker_thread.detach();
+#else    
+    pthread_t worker_thread;
     // start thread
     if (pthread_create(&worker_thread, NULL, worker, writer_rbf)) {
         // some error while creating the thread, TODO
@@ -545,6 +579,7 @@ int init(void) {
         #endif
         return 0;
     }
+#endif    
     #ifdef _DEBUG
       printf("Created Thread");
     #endif
@@ -665,7 +700,7 @@ void usage(std::string progname) {
 	std::cout << progname <<" --beatdemo: Test Beatdetection (Output to Shitlight)\n";
 }
 
-void beattest(void)
+void beattest(std::string device)
 {
   int i;
   int err;
@@ -677,9 +712,9 @@ void beattest(void)
   snd_pcm_hw_params_t *hw_params;
   snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
 
-  if ((err = snd_pcm_open (&capture_handle, "hw:1,0", SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+  if ((err = snd_pcm_open (&capture_handle, device.c_str(), SND_PCM_STREAM_CAPTURE, 0)) < 0) {
     fprintf (stderr, "cannot open audio device %s (%s)\n", 
-             "default",
+             device,
              snd_strerror (err));
     exit (1);
   }
@@ -794,7 +829,8 @@ void beattest(void)
 
 int beatdemo(void) {
     init();
-    init_analysis(0);
+    std::string device("default");
+    init_analysis((uint8_t)0,device.c_str());
     beat_sync(11);
     int i,j,k;
     t_chitframe f;
@@ -949,8 +985,12 @@ int main(int argnum, char* argv[]) {
     return 1;
   }
   if (std::string(argv[1])=="--beattest") {
-    beattest();
-    return 1;
+	if (argnum>2) {
+		beattest(std::string(argv[2]));
+	} else {
+		beattest(std::string("default"));
+	}
+	return 1;
   }
   if (std::string(argv[1])=="--beatdemo") {
     beatdemo();
