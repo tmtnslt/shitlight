@@ -342,7 +342,6 @@ void *analysis_worker (void* _device) {
     snd_pcm_t *capture_handle;
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-    std::cout << "In Thread still Device " << device << std::endl;
     BTrack b(1024*4/2);
 #ifdef __cplusplus    
     if ((err = snd_pcm_open (&capture_handle, device.c_str(), SND_PCM_STREAM_CAPTURE, 0)) < 0) {
@@ -477,7 +476,7 @@ int get_fps_limit(void) {
 }
 
 double get_bpm(void) {
-	return bpm;
+	return (double)bpm;
 }
 
 int get_volume(void) {
@@ -510,7 +509,6 @@ int init_analysis(int _verbose, const char* alsa_device) {
     count_beats = 0;
 #ifdef __cplusplus
     std::string device(alsa_device);
-    std::cout << "Trying Alsa Device" << device << std::endl;    
     std::thread analysis_thread(analysis_worker, device);
     analysis_thread.detach();
 #else      
@@ -587,9 +585,14 @@ int init(void) {
     return 1;
 }
 
-int init_ltd(void); // basically the same, however we will start the thread which will run
-                    // in a time limited fashion so we can expect some near constant frames per second
-
+int init_nohardware(void){
+    is_shutdown = 0;
+    analysis_shutdown = 1;
+    bpm = 120.0;
+    count_beats = 0;
+    sync_beats = 0;
+    return 1;
+}
 
 t_bufframe chit2buf(uint16_t rep, uint8_t on_beat, t_chitframe* cframe) {
         t_bufframe bff;
@@ -812,7 +815,7 @@ void beattest(std::string device)
 //    }
 //   fprintf(stdout, "Done, pushing to analyzer\n");
     b.processAudioFrameInt(buffer);
-//    fprintf(stderr,"tempo: %.2f\r",b.getCurrentTempoEstimate());
+    fprintf(stderr,"tempo: %.2f\r",b.getCurrentTempoEstimate());
     if (b.beatDueInCurrentFrame()) {
       fprintf(stderr,"*");
     }

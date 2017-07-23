@@ -555,10 +555,10 @@ int wiringPiSetup (void)
 //	GPIO:
 
   gpio = (uint32_t *) mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE) ;
-  if ((int32_t)gpio == -1 )
+  if (static_cast<int32_t>(reinterpret_cast<intptr_t>(gpio)) == -1 )
     return printf("wiringPiSetup: mmap (GPIO) failed: %s\n", strerror (errno)) ;
 
-
+  //gpio = reinterpret_cast<uint32_t>(gpio);
   initialiseEpoch () ;
 
   return 0 ;

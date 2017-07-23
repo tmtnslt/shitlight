@@ -23,8 +23,7 @@ int get_fps_limit(void); // returns the value of the fps limit for calculating a
 int init(void); // does the initialization: creates ring buffer, initializes the gpio pins
     // and starts the thread
 
-int init_ltd(void); // basically the same, however we will start the thread which will run
-                    // in a time limited fashion so we can expect some near constant frames per second
+int init_nohardware(void); // initalizes variables but not the hardware or the worker thread. Used for Simulator
 
 void add_frame(uint16_t rep, uint8_t on_beat, t_chitframe* frame);    // align a frame to optimal memory layout and add to the ring buffer
     // to be drawn (rep) times. This call will block if the ring buffer is full
